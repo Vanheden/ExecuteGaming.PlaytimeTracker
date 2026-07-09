@@ -51,18 +51,29 @@ Run **one instance of the mod per game server**, each with its own `ServerId`.
 
 ## Building
 
-Requires the .NET 6 SDK. Two ways to get the game assemblies to compile against:
+Requires the .NET 6 SDK. The `.csproj` compiles against the BepInEx + V Rising
+interop assemblies from a **real dedicated-server install** (no NuGet game
+packages), so it always matches your exact game version. The interop assemblies
+are generated the first time the server is launched with BepInEx — boot it once
+if `BepInEx/interop/` is empty.
 
-1. **NuGet (default):** the `.csproj` pulls BepInEx + VampireCommandFramework +
-   the V Rising interop assemblies from the BepInEx/community NuGet feeds. Just:
+Point the build at that install (in priority order):
+
+1. `VRISING_SERVER` environment variable (recommended for a fresh clone):
    ```bash
+   setx VRISING_SERVER "C:\VRisingServer\serverfiles"   # Windows, once
    dotnet build -c Release
    ```
-2. **Local interop (fallback):** if NuGet can't supply the interop assemblies for
-   your game version, point it at your server install and build:
+2. Or a one-off command-line override:
    ```bash
-   dotnet build -c Release -p:VRisingInterop="C:\VRisingServer\BepInEx\interop"
+   dotnet build -c Release -p:VRisingServer="C:\VRisingServer\serverfiles"
    ```
+3. Or just `dotnet build -c Release` to use the per-machine default baked into the
+   `.csproj`.
+
+`VRisingServer` is the **serverfiles** folder — the one with `VRisingServer.exe`
+and a `BepInEx/` subfolder. If it's wrong or unbooted, the build fails fast with a
+clear message instead of a wall of missing-type errors.
 
 The output DLL is `bin/Release/ExecuteGaming.PlaytimeTracker.dll`.
 

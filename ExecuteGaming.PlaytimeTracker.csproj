@@ -23,8 +23,16 @@
     <CopyLocalLockFileAssemblies>false</CopyLocalLockFileAssemblies>
   </PropertyGroup>
 
-  <!-- Path to the dedicated-server install. Override on the command line with
-       /p:VRisingServer="X:\path\to\serverfiles" if yours differs. -->
+  <!-- Path to the dedicated-server install (the folder with VRisingServer.exe and
+       a booted BepInEx/). Resolved in priority order:
+         1. -p:VRisingServer="X:\path\to\serverfiles" on the command line
+         2. the VRISING_SERVER environment variable
+         3. the per-machine default below
+       So a fresh clone on another machine just needs `setx VRISING_SERVER ...`
+       (or a one-off -p:) instead of editing this file. -->
+  <PropertyGroup Condition="'$(VRisingServer)' == '' and '$(VRISING_SERVER)' != ''">
+    <VRisingServer>$(VRISING_SERVER)</VRisingServer>
+  </PropertyGroup>
   <PropertyGroup Condition="'$(VRisingServer)' == ''">
     <VRisingServer>D:\VS Studio Projekt\V Rising\servers\1\serverfiles</VRisingServer>
   </PropertyGroup>
@@ -32,6 +40,13 @@
     <BepInExCore>$(VRisingServer)\BepInEx\core</BepInExCore>
     <BepInExInterop>$(VRisingServer)\BepInEx\interop</BepInExInterop>
   </PropertyGroup>
+
+  <!-- Fail early with an actionable message instead of a wall of CS0246s when the
+       game assemblies can't be found (wrong path, or server never booted once). -->
+  <Target Name="ValidateVRisingServer" BeforeTargets="ResolveAssemblyReferences">
+    <Error Condition="!Exists('$(BepInExInterop)')"
+           Text="V Rising interop assemblies not found at '$(BepInExInterop)'. Point the build at your dedicated-server install via the VRISING_SERVER environment variable or -p:VRisingServer=&quot;X:\path\to\serverfiles&quot;, and make sure the server has been launched once with BepInEx so BepInEx\interop is generated." />
+  </Target>
 
   <!-- BepInEx + Harmony (from the installed BepInExPack V Rising). -->
   <ItemGroup>
