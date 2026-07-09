@@ -102,6 +102,26 @@ a method's real signature — that's how the v1.1.13.0 signatures below were fou
 - After a big V Rising patch, re-verify all of the above against the current
   assemblies (re-run the metadata dumper). Bump the plugin version and rebuild.
 
+## Debugging "not tracking" on live
+
+When the live leaderboard stays empty, the site is almost never the cause — check
+in this order:
+
+1. **Is the site healthy?** `POST https://execute-gaming.se/api/ingest/session` with
+   a wrong secret. `401` = the site is up and ingest is enabled (so it's a mod-side
+   problem); `503` = no `INGEST_SECRET` set on the site; a `200` leaderboard fetch
+   returning a `metric` field confirms the current code is deployed. A correct secret
+   with a bad body returns `400` (auth passed, nothing written) — a safe way to test
+   the secret without polluting data.
+2. **Is the mod reporting?** Game-server log: `reporting=on` (secret set) and
+   `Connect:` lines on join. `reporting=OFF` = blank `Secret` in the `.cfg`.
+3. **Right target + secret?** `Ingest (…) returned 401` = the `.cfg` `Secret` doesn't
+   match the site's `INGEST_SECRET`. A connection error to `localhost` = `Url` still
+   holds the local test value — point it at the live host.
+
+The classic failure: the site secret was rotated but the game servers' `.cfg` still
+has the old test secret and/or `Url = http://localhost:3001/...`.
+
 ## Conventions
 
 - Never block the game thread on I/O — HTTP is always fire-and-forget (`Task.Run`).

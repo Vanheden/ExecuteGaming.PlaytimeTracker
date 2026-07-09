@@ -112,28 +112,53 @@ The output DLL is `bin/Release/ExecuteGaming.PlaytimeTracker.dll`.
    restart the site. (If it's blank, `/api/ingest/session` returns 503 and the
    leaderboard just stays empty — a safe "off" state.)
 
+## Deploying to your live servers
+
+Run the **same DLL** on every game server; each just needs its own `.cfg` with the
+right `ServerId`. For each server:
+
+1. **Stop** the server — the DLL in `BepInEx/plugins/` is **file-locked while it
+   runs**, so you can't overwrite it live.
+2. Copy `bin/Release/ExecuteGaming.PlaytimeTracker.dll` → `BepInEx/plugins/`.
+3. Start once to generate the `.cfg` (or copy a prepared one), stop again, and set:
+   ```ini
+   [Ingest]
+   Url = https://execute-gaming.se/api/ingest/session   ; kill URL is derived (/kill)
+   Secret = <exactly the site's INGEST_SECRET>
+   ServerId = vrising-pve                                 ; vrising-duo on the other
+   HeartbeatMinutes = 5
+   ```
+4. **Start** the server.
+
+On the website VM, set the **same** `INGEST_SECRET` in `.env` and restart the site.
+
 ### Verifying
 
-- The BepInEx console logs `Connect:` / `Disconnect:` lines as players come and go.
-- Join the server, then load `…/leaderboard` — your character should appear once
-  a heartbeat or your disconnect has posted some time. Steam-linked accounts show
-  their site username and link to their profile; others show the character name.
+- On load the console logs `Playtime Tracker loaded — … reporting=on` (`on` means a
+  secret is set). It also logs `Connect:` / `Disconnect:`, `V Blood:` and `PvP:`
+  lines as those events happen.
+- Join the server, then load `…/leaderboard` — your character should appear once a
+  heartbeat, kill, or disconnect has posted. Steam-linked accounts show their site
+  username and link to their profile; others show the character name.
+- **Empty leaderboard?** Check the game-server log: `reporting=OFF` = blank secret;
+  `Ingest (…) returned 401` = secret doesn't match the site; a connection error to
+  `localhost` = `Url` still points at the test value. The site is almost never the
+  problem (confirm with a `POST …/api/ingest/session` — `401` means the site is up
+  and the mismatch is on the mod side).
 
 ## Keeping the mod alive
 
-V Rising patches can rename or reshape the hooked methods. If reporting stops
-after a game update, re-check these against the current assemblies (all in
-`src/Patches/ServerBootstrapPatches.cs`):
+V Rising patches can rename or reshape the hooked methods. If reporting stops after
+a game update, re-dump the interop assemblies (see `CLAUDE.md`) and re-check these:
 
-- `ServerBootstrapSystem.OnUserConnected(int userIndex)`
-- `ServerBootstrapSystem.OnUserDisconnected(int userIndex, …)`
-- the `User` fields `PlatformId` and `CharacterName`
+- `ServerBootstrapSystem.OnUserConnected(NetConnectionId)` /
+  `OnUserDisconnected(NetConnectionId, ConnectionStatusChangeReason, string)`
+  (`src/Patches/ServerBootstrapPatches.cs`), and the `User` fields `PlatformId`
+  and `CharacterName`.
+- `VBloodSystem.OnUpdate` (`EventList : NativeList<VBloodConsumed>`) and
+  `DeathEventListenerSystem.OnUpdate` (`_DeathEventQuery` → `DeathEvent`)
+  (`src/Patches/KillPatches.cs`).
 
-Then bump the package versions in the `.csproj` and rebuild.
+Then bump the version in `.csproj` / `manifest.json` / `Plugin.cs` and rebuild.
 
-## Roadmap: points
-
-The leaderboard currently ranks by **time**. A future **points** layer (V Blood /
-boss kills, PvP kills) can be added by patching the relevant game events and
-POSTing them alongside sessions — no new data source needed, since it builds on
-the same ingest path.
+See `ROADMAP.md` for what's next.
