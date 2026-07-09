@@ -1,42 +1,40 @@
 using System;
 using HarmonyLib;
-using ProjectM;                 // VBloodSystem, VBloodConsumed, DeathEventListenerSystem, DeathEvent, PlayerCharacter
+using ProjectM;                 // DeathEventListenerSystem, DeathEvent, PlayerCharacter, VBloodUnit, VBloodConsumeSource
 using ProjectM.Network;         // User (PlatformId, CharacterName)
+using Stunlock.Core;            // PrefabGUID
 using Unity.Collections;        // Allocator, NativeArray
 using Unity.Entities;           // Entity, EntityManager, EntityQuery
 using BepInEx.Logging;
 
 namespace ExecuteGaming.PlaytimeTracker.Patches;
 
-// Hooks V Rising's V Blood consumption + death events to record kills.
+// Records kills from V Rising's death events. Both V Blood boss kills and PvP kills
+// come through the same DeathEventListenerSystem — a death is a V Blood kill when
+// the dead entity is a V Blood unit, and a PvP kill when killer and victim are both
+// players. (The earlier VBloodSystem.EventList hook only saw *consumption*/feeding,
+// not the kill, so it's been dropped in favour of this.)
 //
-// Signatures verified against game v1.1.13.0 (see mod CLAUDE.md — dumped from the
-// interop assemblies):
-//   VBloodSystem.OnUpdate()                 field EventList : NativeList<VBloodConsumed>
-//     VBloodConsumed { PrefabGUID Source (which V Blood); Entity Target (consumer) }
-//   DeathEventListenerSystem.OnUpdate()     field _DeathEventQuery : EntityQuery
-//     DeathEvent { Entity Died; Entity Killer; Entity Source; StatChangeReason }
-//   PlayerCharacter { FixedString64Bytes Name; Entity UserEntity }
-// If a future V Rising patch stops kills recording, re-dump these and re-check.
+// Verified against game v1.1.13.0:
+//   DeathEventListenerSystem.OnUpdate()   field _DeathEventQuery : EntityQuery
+//   DeathEvent { Entity Died; Entity Killer; Entity Source; StatChangeReason }
+//   PlayerCharacter { FixedString64Bytes Name; Entity UserEntity }  (ProjectM.Shared)
+//   VBloodUnit / VBloodConsumeSource mark a V Blood entity          (ProjectM.Shared)
 public static class KillPatchShared
 {
     public static IngestClient Ingest;
     public static ManualLogSource Log;
 
-    // Resolve the owning User for an entity that may be either a player *character*
-    // (has PlayerCharacter → UserEntity → User) or a user entity directly. Returns
-    // false for non-players (mobs, environment). Never throws.
+    // Resolve the owning User for an entity that may be a player character (has
+    // PlayerCharacter → UserEntity → User) or a user entity directly. False for
+    // non-players. Never throws.
     public static bool TryResolveUser(EntityManager em, Entity e, out User user)
     {
         user = default;
         try
         {
             if (e == Entity.Null) return false;
-            if (em.HasComponent<User>(e))
-            {
-                user = em.GetComponentData<User>(e);
-                return true;
-            }
+            if (em.HasComponent<User>(e)) { user = em.GetComponentData<User>(e); return true; }
             if (em.HasComponent<PlayerCharacter>(e))
             {
                 var pc = em.GetComponentData<PlayerCharacter>(e);
@@ -47,14 +45,29 @@ public static class KillPatchShared
                 }
             }
         }
-        catch (Exception ex)
-        {
-            Log?.LogWarning($"TryResolveUser failed: {ex.Message}");
-        }
+        catch (Exception ex) { Log?.LogWarning($"TryResolveUser failed: {ex.Message}"); }
         return false;
     }
 
-    // Best-effort character name for an entity (for the PvP victim label).
+    public static bool IsPlayer(EntityManager em, Entity e)
+        => e != Entity.Null && em.HasComponent<PlayerCharacter>(e);
+
+    public static bool IsVBlood(EntityManager em, Entity e)
+        => e != Entity.Null && (em.HasComponent<VBloodUnit>(e) || em.HasComponent<VBloodConsumeSource>(e));
+
+    // The dead entity's own prefab id (e.g. the V Blood boss), as a string, or "".
+    public static string PrefabGuid(EntityManager em, Entity e)
+    {
+        try
+        {
+            if (e != Entity.Null && em.HasComponent<PrefabGUID>(e))
+                return em.GetComponentData<PrefabGUID>(e).GuidHash.ToString();
+        }
+        catch { /* ignore */ }
+        return "";
+    }
+
+    // Best-effort character name for a player entity (PvP victim label).
     public static string NameOf(EntityManager em, Entity e)
     {
         try
@@ -67,47 +80,10 @@ public static class KillPatchShared
     }
 }
 
-// V Blood boss kills. The consumer (Target) is a player; Source is the V Blood's
-// PrefabGUID. Postfix reads EventList after the system has populated it this frame.
-[HarmonyPatch(typeof(VBloodSystem), nameof(VBloodSystem.OnUpdate))]
-public static class VBloodSystemPatch
-{
-    public static void Postfix(VBloodSystem __instance)
-    {
-        var ingest = KillPatchShared.Ingest;
-        if (ingest == null) return;
-        try
-        {
-            var events = __instance.EventList;
-            var n = events.Length;
-            if (n == 0) return; // fires most frames with nothing — stay quiet then
-            KillPatchShared.Log?.LogInfo($"VBloodSystem: {n} consumed event(s) this frame.");
-
-            var em = __instance.EntityManager;
-            for (int i = 0; i < n; i++)
-            {
-                var ev = events[i];
-                var resolved = KillPatchShared.TryResolveUser(em, ev.Target, out var user);
-                KillPatchShared.Log?.LogInfo(
-                    $"  VBlood[{i}] vblood={ev.Source.GuidHash} target={ev.Target.Index}:{ev.Target.Version} resolvedPlayer={resolved}");
-                if (!resolved) continue;
-                ingest.PostKill(user.PlatformId, user.CharacterName.ToString(), "vblood",
-                    ev.Source.GuidHash.ToString());
-                KillPatchShared.Log?.LogInfo($"  → posted V Blood for {user.CharacterName} ({user.PlatformId})");
-            }
-        }
-        catch (Exception ex)
-        {
-            KillPatchShared.Log?.LogWarning($"VBlood patch failed: {ex.Message}");
-        }
-    }
-}
-
-// PvP kills. A death is PvP when both killer and victim are player characters and
-// distinct. Prefix reads the death events before the system consumes/destroys them.
 [HarmonyPatch(typeof(DeathEventListenerSystem), nameof(DeathEventListenerSystem.OnUpdate))]
 public static class DeathEventPatch
 {
+    // Prefix: the death entities still exist before the system consumes them.
     public static void Prefix(DeathEventListenerSystem __instance)
     {
         var ingest = KillPatchShared.Ingest;
@@ -130,14 +106,29 @@ public static class DeathEventPatch
             for (int i = 0; i < deaths.Length; i++)
             {
                 var de = deaths[i];
-                if (de.Killer == de.Died) continue;                       // suicide/environment
-                if (!em.HasComponent<PlayerCharacter>(de.Killer)) continue; // killer must be a player
-                if (!em.HasComponent<PlayerCharacter>(de.Died)) continue;   // victim must be a player
-                if (!KillPatchShared.TryResolveUser(em, de.Killer, out var killer)) continue;
+                var killerIsPlayer = KillPatchShared.IsPlayer(em, de.Killer);
+                var sourceIsPlayer = KillPatchShared.IsPlayer(em, de.Source);
+                var diedIsPlayer = KillPatchShared.IsPlayer(em, de.Died);
+                var diedIsVBlood = KillPatchShared.IsVBlood(em, de.Died);
 
-                var victim = KillPatchShared.NameOf(em, de.Died);
-                ingest.PostKill(killer.PlatformId, killer.CharacterName.ToString(), "pvp", victim);
-                KillPatchShared.Log?.LogInfo($"PvP: {killer.CharacterName} killed {victim}");
+                // The scoring player is the killer if they're a player, else the source
+                // (some kills attribute the player via Source, e.g. via a summon/DoT).
+                var scorer = killerIsPlayer ? de.Killer : sourceIsPlayer ? de.Source : Entity.Null;
+
+                if (diedIsVBlood && scorer != Entity.Null)
+                {
+                    if (!KillPatchShared.TryResolveUser(em, scorer, out var user)) continue;
+                    ingest.PostKill(user.PlatformId, user.CharacterName.ToString(), "vblood",
+                        KillPatchShared.PrefabGuid(em, de.Died));
+                    KillPatchShared.Log?.LogInfo($"  → V Blood kill for {user.CharacterName} ({user.PlatformId})");
+                }
+                else if (killerIsPlayer && diedIsPlayer && de.Killer != de.Died)
+                {
+                    if (!KillPatchShared.TryResolveUser(em, de.Killer, out var killer)) continue;
+                    ingest.PostKill(killer.PlatformId, killer.CharacterName.ToString(), "pvp",
+                        KillPatchShared.NameOf(em, de.Died));
+                    KillPatchShared.Log?.LogInfo($"  → PvP kill: {killer.CharacterName} killed {KillPatchShared.NameOf(em, de.Died)}");
+                }
             }
         }
         catch (Exception ex)

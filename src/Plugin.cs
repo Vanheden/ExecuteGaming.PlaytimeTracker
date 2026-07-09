@@ -8,7 +8,7 @@ using ExecuteGaming.PlaytimeTracker.Patches;
 
 namespace ExecuteGaming.PlaytimeTracker;
 
-[BepInPlugin(GUID, "Execute-Gaming Playtime Tracker", "0.2.1")]
+[BepInPlugin(GUID, "Execute-Gaming Playtime Tracker", "0.2.2")]
 [BepInProcess("VRisingServer.exe")]
 public sealed class Plugin : BasePlugin
 {
@@ -54,7 +54,6 @@ public sealed class Plugin : BasePlugin
         {
             typeof(OnUserConnectedPatch),
             typeof(OnUserDisconnectedPatch),
-            typeof(VBloodSystemPatch),
             typeof(DeathEventPatch),
         };
         foreach (var t in types)
