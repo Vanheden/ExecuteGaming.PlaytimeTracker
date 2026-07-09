@@ -15,17 +15,25 @@ namespace ExecuteGaming.PlaytimeTracker;
 // self-heal (the next heartbeat/disconnect re-sends and the server UPSERTs by
 // sessionId); kills are idempotent server-side by a per-kill eventId, so a lost
 // request just means one missing kill — never a double count on retry.
-public sealed class IngestClient
+public sealed class IngestClient : IDisposable
 {
-    static readonly HttpClient Http = new() { Timeout = TimeSpan.FromSeconds(10) };
+    internal static readonly HttpClient Http = new() { Timeout = TimeSpan.FromSeconds(10) };
 
     readonly PlaytimeConfig _config;
     readonly ManualLogSource _log;
+    KillQueue _killQueue;
 
     public IngestClient(PlaytimeConfig config, ManualLogSource log)
     {
         _config = config;
         _log = log;
+    }
+
+    // Called from Plugin.Load after the plugin directory is known, to initialise
+    // the on-disk kill queue for resilient retry during website outages.
+    public void InitKillQueue(string pluginDir)
+    {
+        _killQueue = new KillQueue(pluginDir, KillUrl, _config.IngestSecret.Value, _log);
     }
 
     bool Enabled => !string.IsNullOrWhiteSpace(_config.IngestSecret.Value)
@@ -61,11 +69,12 @@ public sealed class IngestClient
     {
         if (!Enabled) return;
         var json = BuildKillJson(steamId, charName, kind, victim);
-        Send(KillUrl, json, $"{kind} kill {steamId}");
+        Send(KillUrl, json, $"{kind} kill {steamId}", isKill: true);
     }
 
     // Shared fire-and-forget POST. Never blocks the game/heartbeat thread.
-    void Send(string url, string json, string tag)
+    // Kill POSTs that fail are enqueued for retry via the on-disk KillQueue.
+    void Send(string url, string json, string tag, bool isKill = false)
     {
         var secret = _config.IngestSecret.Value;
         _ = Task.Run(async () =>
@@ -77,11 +86,17 @@ public sealed class IngestClient
                 req.Content = new StringContent(json, Encoding.UTF8, "application/json");
                 using var res = await Http.SendAsync(req).ConfigureAwait(false);
                 if (!res.IsSuccessStatusCode)
+                {
                     _log.LogWarning($"Ingest ({tag}) returned {(int)res.StatusCode}.");
+                    if (isKill && _killQueue != null)
+                        _killQueue.Enqueue(json);
+                }
             }
             catch (Exception ex)
             {
                 _log.LogWarning($"Ingest ({tag}) failed: {ex.Message}");
+                if (isKill && _killQueue != null)
+                    _killQueue.Enqueue(json);
             }
         });
     }
@@ -143,4 +158,6 @@ public sealed class IngestClient
         }
         return sb.ToString();
     }
+
+    public void Dispose() => _killQueue?.Dispose();
 }

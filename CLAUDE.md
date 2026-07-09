@@ -29,6 +29,9 @@ user-facing `README.md` here for install/config; this file is the working notes.
   thread. Matches the site's `POST /api/ingest/session` contract exactly.
 - `src/Patches/ServerBootstrapPatches.cs` — connect/disconnect patches (playtime).
 - `src/Patches/KillPatches.cs` — V Blood + PvP kill patches (see below).
+- `src/KillQueue.cs` — on-disk NDJSON kill queue. Failed kill POSTs are appended to
+  `killqueue.ndjson` next to the plugin DLL; a background timer retries every 2 min.
+  Capped at 500 entries. The site deduplicates by `eventId` so retries are harmless.
 
 ## The ingest contract (keep in sync with the site)
 

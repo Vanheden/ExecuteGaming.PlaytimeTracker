@@ -1,4 +1,6 @@
 using System;
+using System.IO;
+using System.Reflection;
 using System.Threading;
 using BepInEx;
 using BepInEx.Unity.IL2CPP;
@@ -8,7 +10,7 @@ using ExecuteGaming.PlaytimeTracker.Patches;
 
 namespace ExecuteGaming.PlaytimeTracker;
 
-[BepInPlugin(GUID, "Execute-Gaming Playtime Tracker", "0.2.2")]
+[BepInPlugin(GUID, "Execute-Gaming Playtime Tracker", "0.2.4")]
 [BepInProcess("VRisingServer.exe")]
 public sealed class Plugin : BasePlugin
 {
@@ -18,14 +20,21 @@ public sealed class Plugin : BasePlugin
     Harmony _harmony;
     Timer _heartbeat;
     SessionTracker _tracker;
+    IngestClient _ingest;
 
     public override void Load()
     {
         _log = Log;
 
         var config = new PlaytimeConfig(Config);
-        var ingest = new IngestClient(config, Log);
+        _ingest = new IngestClient(config, Log);
+        var ingest = _ingest;
         _tracker = new SessionTracker(ingest, Log);
+
+        // Initialise the on-disk kill queue (plugin directory for the queue file).
+        var pluginDir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
+        if (!string.IsNullOrEmpty(pluginDir) && !string.IsNullOrWhiteSpace(config.IngestSecret.Value))
+            ingest.InitKillQueue(pluginDir);
 
         // Make the tracker + ingest client reachable from the static Harmony patches.
         BootstrapPatchShared.Tracker = _tracker;
@@ -80,6 +89,7 @@ public sealed class Plugin : BasePlugin
     {
         _heartbeat?.Dispose();
         try { _tracker?.FlushAll(); } catch { /* best effort on shutdown */ }
+        _ingest?.Dispose();
         _harmony?.UnpatchSelf();
         return true;
     }

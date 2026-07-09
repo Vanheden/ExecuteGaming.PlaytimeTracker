@@ -18,6 +18,10 @@ Small, focused mod, so this is short. Effort: **S** = an hour · **M** = an afte
   (`CHAR_VampireMale`, GUID `38526109`), so every PvP death was logged as a V Blood
   kill. Added `!diedIsPlayer` guard to the V Blood condition. Deployed to PvE server;
   PvP server pending manual DLL copy.
+- **On-disk kill queue** (v0.2.4) — failed kill POSTs are saved to `killqueue.ndjson`
+  and retried every 2 minutes, so kills survive a website outage instead of being
+  dropped. Sessions already self-heal via heartbeat; this closes the gap for kills.
+  Capped at 500 entries; site-side `eventId` dedup makes retries harmless.
 - **Portable build** — references the local server install via `$(VRisingServer)` /
   `VRISING_SERVER`, no NuGet game packages; fails fast if the path is wrong.
 - **Resilient patching** — each hook is applied independently and logs `Patched X ✓`
@@ -37,8 +41,9 @@ Small, focused mod, so this is short. Effort: **S** = an hour · **M** = an afte
   in-mod (if a prefab-name map is reachable) so the site needn't maintain a hash table.
 - **Boss-difficulty weighting** (S) — send the V Blood tier so the site can score a
   late-game V Blood higher than an early one.
-- **Resilience** (S) — small on-disk queue so kills survive a website outage instead
-  of being dropped (sessions already self-heal via heartbeat; kills currently don't).
+- ~~**Resilience**~~ (S) ✅ — on-disk kill queue (`KillQueue.cs`, v0.2.4) so kills
+  survive a website outage instead of being dropped. Sessions already self-heal via
+  heartbeat. Retries are harmless (site deduplicates by `eventId`).
 - **Thunderstore packaging** (S) — ship a proper package via `manifest.json` if we
   ever want to distribute it beyond our own servers.
 
