@@ -21,7 +21,7 @@ Small, focused mod, so this is short. Effort: **S** = an hour · **M** = an afte
 
 ## 🔜 Now
 
-- **Grow the V Blood boss name map** — the site now shows "Latest: <boss>" from the
+- **Grow the V Blood boss name map** — the site now shows "Latest Kill: <boss>" from the
   `victim` PrefabGUID hash the mod already sends, via a hash→name map on the site
   (`Website/src/data/vbloods.js`). Only Alpha Wolf (`-1905691330`) is confirmed; fill
   in the rest by reading GUIDs from the server log (`Death: diedPrefab=… vblood=True`)
