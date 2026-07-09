@@ -115,7 +115,11 @@ public static class DeathEventPatch
                 // (some kills attribute the player via Source, e.g. via a summon/DoT).
                 var scorer = killerIsPlayer ? de.Killer : sourceIsPlayer ? de.Source : Entity.Null;
 
-                if (diedIsVBlood && scorer != Entity.Null)
+                // A V Blood kill requires the dead entity to be a V Blood unit AND not a
+                // player — players carry VBloodConsumeSource (they can be fed on) but are
+                // not bosses, so without !diedIsPlayer every PvP death was misclassified
+                // as a V Blood kill (CHAR_VampireMale, GUID 38526109).
+                if (diedIsVBlood && !diedIsPlayer && scorer != Entity.Null)
                 {
                     if (!KillPatchShared.TryResolveUser(em, scorer, out var user)) continue;
                     ingest.PostKill(user.PlatformId, user.CharacterName.ToString(), "vblood",

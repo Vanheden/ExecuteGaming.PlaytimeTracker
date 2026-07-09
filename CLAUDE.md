@@ -91,7 +91,10 @@ a method's real signature — that's how the v1.1.13.0 signatures below were fou
   `DeathEvent { Entity Died; Entity Killer; Entity Source; StatChangeReason }`.
   - A death is a **V Blood kill** when `Died` has `VBloodUnit` **or**
     `VBloodConsumeSource` (both `ProjectM.Shared`) and the scorer — `Killer` if it's a
-    player, else `Source` — is a player. `victim` sent is `Died`'s `PrefabGUID.GuidHash`
+    player, else `Source` — is a player **and `Died` is not itself a player**. Players
+    carry `VBloodConsumeSource` (they can be fed on) so without the `!diedIsPlayer`
+    guard every PvP death was misclassified as a V Blood kill (`CHAR_VampireMale`,
+    GUID `38526109`). `victim` sent is `Died`'s `PrefabGUID.GuidHash`
     (confirmed live: **Alpha Wolf = `-1905691330`**).
   - A death is a **PvP kill** when `Killer ≠ Died` and **both** have `PlayerCharacter`;
     score the `Killer`, `victim` is the dead player's character name.

@@ -14,7 +14,7 @@
   <PropertyGroup>
     <TargetFramework>net6.0</TargetFramework>
     <AssemblyName>ExecuteGaming.PlaytimeTracker</AssemblyName>
-    <Version>0.2.2</Version>
+    <Version>0.2.3</Version>
     <LangVersion>latest</LangVersion>
     <Nullable>disable</Nullable>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
