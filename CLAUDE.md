@@ -27,15 +27,23 @@ user-facing `README.md` here for install/config; this file is the working notes.
   `Heartbeat` / `FlushAll` (called from the timer thread).
 - `src/IngestClient.cs` — fire-and-forget HTTP POST, hand-rolled JSON, off the game
   thread. Matches the site's `POST /api/ingest/session` contract exactly.
-- `src/Patches/ServerBootstrapPatches.cs` — the Harmony patches (see below).
+- `src/Patches/ServerBootstrapPatches.cs` — connect/disconnect patches (playtime).
+- `src/Patches/KillPatches.cs` — V Blood + PvP kill patches (see below).
 
 ## The ingest contract (keep in sync with the site)
 
-`POST {Url}` with header `X-Ingest-Secret: {Secret}` and body
-`{ sessionId, serverId, steamId, charName, startedAt, endedAt?, seconds }`.
-Everything is keyed by a **per-connect `sessionId` (GUID)** so heartbeats and the
-final disconnect UPSERT one row — idempotent, no double counting, self-healing.
-If you change this shape, change `../Website/server/playtime.js` too.
+Two endpoints, same secret header. The kill URL is **derived** from `Url` by
+swapping the trailing `/session` for `/kill`, so operators configure one base URL.
+
+- `POST {Url}` (`…/session`) — `{ sessionId, serverId, steamId, charName, startedAt, endedAt?, seconds }`.
+  Keyed by a **per-connect `sessionId` (GUID)** so heartbeats + the final disconnect
+  UPSERT one row — idempotent, no double counting, self-healing.
+- `POST …/kill` — `{ eventId, serverId, steamId, charName, kind, victim, occurredAt }`
+  where `kind` is `vblood` or `pvp`. Keyed by a **per-kill `eventId` (GUID)** so a
+  retry can't double-count (server does INSERT OR IGNORE). `victim` is the V Blood's
+  PrefabGUID hash (vblood) or the victim's character name (pvp).
+
+If you change either shape, change `../Website/server/playtime.js` too.
 
 ## Building & testing (no NuGet game packages)
 
@@ -75,8 +83,24 @@ a method's real signature — that's how the v1.1.13.0 signatures below were fou
 - **Threading:** only touch ECS (EntityManager/components) from the game thread
   (the Harmony patches). The heartbeat timer thread must not read game state — it
   only re-POSTs already-captured session data.
+- **Kill hooks (v1.1.13.0, dumped from interop):**
+  - **V Blood:** `VBloodSystem.OnUpdate()` (in `ProjectM.Gameplay.Systems.dll`) —
+    read field `EventList : NativeList<VBloodConsumed>` in a **Postfix**.
+    `VBloodConsumed { PrefabGUID Source (which V Blood); Entity Target (the consumer) }`.
+    `Target` is the player character → resolve its `User`.
+  - **PvP:** `DeathEventListenerSystem.OnUpdate()` (in `ProjectM.dll`) — read
+    `_DeathEventQuery.ToComponentDataArray<DeathEvent>(Allocator.Temp)` in a **Prefix**
+    (the death entities still exist before the system consumes them; dispose the array).
+    `DeathEvent { Entity Died; Entity Killer; Entity Source; StatChangeReason }`.
+    It's PvP when Killer≠Died and **both** have `PlayerCharacter`; score the Killer.
+  - `PlayerCharacter { FixedString64Bytes Name; Entity UserEntity }` and `DeathEvent`
+    live in `ProjectM.Shared.dll`; `PrefabGUID` (`.GuidHash`) in `Stunlock.Core.dll`.
+  - **Verify-live first:** these two are the most fragile bits. If V Bloods don't
+    register, try flipping the VBlood patch Prefix↔Postfix; if kills resolve to the
+    wrong player, `VBloodConsumed.Target` may be the user entity rather than the
+    character — `TryResolveUser` already handles both. Watch for `V Blood:`/`PvP:` logs.
 - After a big V Rising patch, re-verify all of the above against the current
-  assemblies. Bump the plugin version and rebuild.
+  assemblies (re-run the metadata dumper). Bump the plugin version and rebuild.
 
 ## Conventions
 

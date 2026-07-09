@@ -8,7 +8,7 @@ using ExecuteGaming.PlaytimeTracker.Patches;
 
 namespace ExecuteGaming.PlaytimeTracker;
 
-[BepInPlugin(GUID, "Execute-Gaming Playtime Tracker", "0.1.0")]
+[BepInPlugin(GUID, "Execute-Gaming Playtime Tracker", "0.2.0")]
 [BepInProcess("VRisingServer.exe")]
 public sealed class Plugin : BasePlugin
 {
@@ -27,9 +27,11 @@ public sealed class Plugin : BasePlugin
         var ingest = new IngestClient(config, Log);
         _tracker = new SessionTracker(ingest, Log);
 
-        // Make the tracker reachable from the static Harmony patches.
+        // Make the tracker + ingest client reachable from the static Harmony patches.
         BootstrapPatchShared.Tracker = _tracker;
         BootstrapPatchShared.Log = Log;
+        KillPatchShared.Ingest = ingest;
+        KillPatchShared.Log = Log;
 
         _harmony = new Harmony(GUID);
         _harmony.PatchAll(typeof(Plugin).Assembly);

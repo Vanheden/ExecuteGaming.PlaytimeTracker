@@ -1,24 +1,36 @@
 # Execute-Gaming Playtime Tracker
 
-A server-side **BepInEx (IL2CPP) mod for V Rising** that reports per-player play
-sessions to the Execute-Gaming website, which powers the **playtime leaderboard**
-at [execute-gaming.se/leaderboard](https://execute-gaming.se/leaderboard).
+A server-side **BepInEx (IL2CPP) mod for V Rising** that reports per-player
+**playtime, V Blood boss kills and PvP kills** to the Execute-Gaming website, which
+powers the **leaderboard** at
+[execute-gaming.se/leaderboard](https://execute-gaming.se/leaderboard) (ranked by
+Points, Playtime, V Blood or PvP kills).
 
 This is the game-server half of the leaderboard feature. The website half (the
-ingest endpoint, aggregation, and the `/leaderboard` page) already lives in the
+ingest endpoints, aggregation, and the `/leaderboard` page) already lives in the
 `Website/` project and was built and tested against the exact contract below.
 
 ## How it works
 
+**Playtime**
 - Harmony-patches `ServerBootstrapSystem.OnUserConnected` / `OnUserDisconnected`
   to know when a player joins and leaves, reading their **SteamID** and
   **character name** from the `User` component.
 - On connect it opens a session (a fresh GUID) and reports it. A timer re-reports
   every open session on a **heartbeat** (default 5 min), and disconnect/shutdown
   closes it — so a crash loses at most one heartbeat interval.
-- Reports go to `POST {IngestUrl}` with an `X-Ingest-Secret` header. Everything is
-  keyed by the per-connect `sessionId`, so the website **UPSERTs** and never
+- Keyed by the per-connect `sessionId`, so the website **UPSERTs** and never
   double-counts, and a dropped request self-heals on the next heartbeat.
+
+**Kills**
+- Harmony-patches `VBloodSystem.OnUpdate` (V Blood consumed = boss killed) and
+  `DeathEventListenerSystem.OnUpdate` (a death where killer and victim are both
+  players = a PvP kill).
+- Each kill is POSTed once with a fresh per-kill `eventId`; the website does
+  `INSERT OR IGNORE`, so a network retry can never double-count.
+
+All reports go with an `X-Ingest-Secret` header. The kill endpoint is derived from
+`Url` automatically (`…/session` → `…/kill`), so you only configure one URL.
 
 ### The contract (must match the website)
 
@@ -33,6 +45,18 @@ Header: X-Ingest-Secret: <shared secret>
   "startedAt": "2026-07-09T18:00:00.000Z",
   "endedAt":   "2026-07-09T19:30:00.000Z",   // omitted while still online
   "seconds":   5400
+}
+
+POST /api/ingest/kill            // same host, derived from Url
+Header: X-Ingest-Secret: <shared secret>
+{
+  "eventId":    "<per-kill GUID>",
+  "serverId":   "vrising-pve",
+  "steamId":    "7656119...",
+  "charName":   "Vlad",
+  "kind":       "vblood",          // or "pvp"
+  "victim":     "-1905691330",     // V Blood PrefabGUID hash, or PvP victim's name
+  "occurredAt": "2026-07-09T18:20:00.000Z"
 }
 ```
 

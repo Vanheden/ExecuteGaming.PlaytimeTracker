@@ -1,8 +1,8 @@
 {
   "name": "ExecuteGaming_PlaytimeTracker",
-  "version_number": "0.1.0",
+  "version_number": "0.2.0",
   "website_url": "https://execute-gaming.se",
-  "description": "Reports V Rising play sessions to the Execute-Gaming website leaderboard.",
+  "description": "Reports V Rising playtime, V Blood and PvP kills to the Execute-Gaming website leaderboard.",
   "dependencies": [
     "BepInEx-BepInExPack_V_Rising-1.700.1"
   ]
