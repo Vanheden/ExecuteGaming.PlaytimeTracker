@@ -1,0 +1,58 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- ==========================================================================
+       Execute-Gaming Playtime Tracker — a BepInEx (IL2CPP) server mod for
+       V Rising. Reports per-player play sessions to the community website's
+       ingest endpoint (POST /api/ingest/session), powering the leaderboard.
+
+       Builds against a real V Rising dedicated-server install: point
+       $(VRisingServer) at the serverfiles folder (the one with VRisingServer.exe
+       and a BepInEx/ subfolder that has already been launched once so
+       BepInEx/interop is populated). Default below matches this machine.
+       ========================================================================== -->
+
+  <PropertyGroup>
+    <TargetFramework>net6.0</TargetFramework>
+    <AssemblyName>ExecuteGaming.PlaytimeTracker</AssemblyName>
+    <Version>0.1.0</Version>
+    <LangVersion>latest</LangVersion>
+    <Nullable>disable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <!-- Don't pull in the default framework assemblies as copies; these are refs. -->
+    <CopyLocalLockFileAssemblies>false</CopyLocalLockFileAssemblies>
+  </PropertyGroup>
+
+  <!-- Path to the dedicated-server install. Override on the command line with
+       /p:VRisingServer="X:\path\to\serverfiles" if yours differs. -->
+  <PropertyGroup Condition="'$(VRisingServer)' == ''">
+    <VRisingServer>D:\VS Studio Projekt\V Rising\servers\1\serverfiles</VRisingServer>
+  </PropertyGroup>
+  <PropertyGroup>
+    <BepInExCore>$(VRisingServer)\BepInEx\core</BepInExCore>
+    <BepInExInterop>$(VRisingServer)\BepInEx\interop</BepInExInterop>
+  </PropertyGroup>
+
+  <!-- BepInEx + Harmony (from the installed BepInExPack V Rising). -->
+  <ItemGroup>
+    <Reference Include="BepInEx.Core"><HintPath>$(BepInExCore)\BepInEx.Core.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="BepInEx.Unity.Common"><HintPath>$(BepInExCore)\BepInEx.Unity.Common.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="BepInEx.Unity.IL2CPP"><HintPath>$(BepInExCore)\BepInEx.Unity.IL2CPP.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="0Harmony"><HintPath>$(BepInExCore)\0Harmony.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="Il2CppInterop.Runtime"><HintPath>$(BepInExCore)\Il2CppInterop.Runtime.dll</HintPath><Private>false</Private></Reference>
+  </ItemGroup>
+
+  <!-- V Rising game assemblies (Il2Cpp interop, generated on first server boot). -->
+  <ItemGroup>
+    <Reference Include="Il2Cppmscorlib"><HintPath>$(BepInExInterop)\Il2Cppmscorlib.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="ProjectM"><HintPath>$(BepInExInterop)\ProjectM.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="ProjectM.Shared"><HintPath>$(BepInExInterop)\ProjectM.Shared.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="Stunlock.Core"><HintPath>$(BepInExInterop)\Stunlock.Core.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="Stunlock.Network"><HintPath>$(BepInExInterop)\Stunlock.Network.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="Unity.Entities"><HintPath>$(BepInExInterop)\Unity.Entities.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="Unity.Collections"><HintPath>$(BepInExInterop)\Unity.Collections.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="Unity.Mathematics"><HintPath>$(BepInExInterop)\Unity.Mathematics.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="UnityEngine.CoreModule"><HintPath>$(BepInExInterop)\UnityEngine.CoreModule.dll</HintPath><Private>false</Private></Reference>
+  </ItemGroup>
+
+</Project>
