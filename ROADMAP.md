@@ -19,13 +19,13 @@ Small, focused mod, so this is short. Effort: **S** = an hour · **M** = an afte
 - **Resilient patching** — each hook is applied independently and logs `Patched X ✓`
   / `FAILED to patch X`, so one bad signature after a game update doesn't kill the rest.
 
-## 🔜 Now
+## ✅ Also done (site side)
 
-- **Grow the V Blood boss name map** — the site now shows "Latest Kill: <boss>" from the
-  `victim` PrefabGUID hash the mod already sends, via a hash→name map on the site
-  (`Website/src/data/vbloods.js`). Only Alpha Wolf (`-1905691330`) is confirmed; fill
-  in the rest by reading GUIDs from the server log (`Death: diedPrefab=… vblood=True`)
-  as bosses are killed. Never guess a name.
+- **"Latest Kill: <boss>"** — the site shows each player's most recent V Blood using
+  the `victim` PrefabGUID hash the mod already sends, resolved to a name via a
+  hash→name map on the site (`Website/src/data/vbloods.js`) seeded with **all 64**
+  V Blood bosses from the official wiki's "V Blood Unit IDs" table. No mod change was
+  needed; a new boss after a game update just needs one row added on the site.
 
 ## 💡 Ideas
 
