@@ -83,7 +83,7 @@ a method's real signature — that's how the v1.1.13.0 signatures below were fou
 - **Threading:** only touch ECS (EntityManager/components) from the game thread
   (the Harmony patches). The heartbeat timer thread must not read game state — it
   only re-POSTs already-captured session data.
-- **Kill hooks (v1.1.13.0, verified LIVE as of v0.2.2):** BOTH V Blood and PvP come
+- **Kill hooks (v1.1.13.0, verified LIVE as of v0.2.3):** BOTH V Blood and PvP come
   through the **same** patch — a **Prefix** on `DeathEventListenerSystem.OnUpdate()`
   (`KillPatches.cs → DeathEventPatch`) that reads
   `_DeathEventQuery.ToComponentDataArray<DeathEvent>(Allocator.Temp)` (the death

@@ -14,6 +14,10 @@ Small, focused mod, so this is short. Effort: **S** = an hour · **M** = an afte
   Alpha Wolf (`-1905691330`). Powers the Points / V Blood / PvP leaderboard tabs.
   (The earlier `VBloodSystem.EventList` Postfix approach was a dead end — see
   `CLAUDE.md` — dropped in v0.2.2 with its csproj reference.)
+- **V Blood misclassification fix** (v0.2.3) — players carry `VBloodConsumeSource`
+  (`CHAR_VampireMale`, GUID `38526109`), so every PvP death was logged as a V Blood
+  kill. Added `!diedIsPlayer` guard to the V Blood condition. Deployed to PvE server;
+  PvP server pending manual DLL copy.
 - **Portable build** — references the local server install via `$(VRisingServer)` /
   `VRISING_SERVER`, no NuGet game packages; fails fast if the path is wrong.
 - **Resilient patching** — each hook is applied independently and logs `Patched X ✓`
