@@ -1,6 +1,6 @@
 {
   "name": "ExecuteGaming_PlaytimeTracker",
-  "version_number": "0.2.0",
+  "version_number": "0.2.1",
   "website_url": "https://execute-gaming.se",
   "description": "Reports V Rising playtime, V Blood and PvP kills to the Execute-Gaming website leaderboard.",
   "dependencies": [

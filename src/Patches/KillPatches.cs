@@ -78,15 +78,22 @@ public static class VBloodSystemPatch
         if (ingest == null) return;
         try
         {
-            var em = __instance.EntityManager;
             var events = __instance.EventList;
-            for (int i = 0; i < events.Length; i++)
+            var n = events.Length;
+            if (n == 0) return; // fires most frames with nothing — stay quiet then
+            KillPatchShared.Log?.LogInfo($"VBloodSystem: {n} consumed event(s) this frame.");
+
+            var em = __instance.EntityManager;
+            for (int i = 0; i < n; i++)
             {
                 var ev = events[i];
-                if (!KillPatchShared.TryResolveUser(em, ev.Target, out var user)) continue;
+                var resolved = KillPatchShared.TryResolveUser(em, ev.Target, out var user);
+                KillPatchShared.Log?.LogInfo(
+                    $"  VBlood[{i}] vblood={ev.Source.GuidHash} target={ev.Target.Index}:{ev.Target.Version} resolvedPlayer={resolved}");
+                if (!resolved) continue;
                 ingest.PostKill(user.PlatformId, user.CharacterName.ToString(), "vblood",
                     ev.Source.GuidHash.ToString());
-                KillPatchShared.Log?.LogInfo($"V Blood: {user.CharacterName} ({user.PlatformId})");
+                KillPatchShared.Log?.LogInfo($"  → posted V Blood for {user.CharacterName} ({user.PlatformId})");
             }
         }
         catch (Exception ex)

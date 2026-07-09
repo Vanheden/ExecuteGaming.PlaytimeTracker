@@ -8,7 +8,7 @@ using ExecuteGaming.PlaytimeTracker.Patches;
 
 namespace ExecuteGaming.PlaytimeTracker;
 
-[BepInPlugin(GUID, "Execute-Gaming Playtime Tracker", "0.2.0")]
+[BepInPlugin(GUID, "Execute-Gaming Playtime Tracker", "0.2.1")]
 [BepInProcess("VRisingServer.exe")]
 public sealed class Plugin : BasePlugin
 {
@@ -34,7 +34,7 @@ public sealed class Plugin : BasePlugin
         KillPatchShared.Log = Log;
 
         _harmony = new Harmony(GUID);
-        _harmony.PatchAll(typeof(Plugin).Assembly);
+        ApplyPatches();
 
         // Heartbeat: re-report open sessions so a crash loses at most one interval.
         var period = TimeSpan.FromMinutes(Math.Max(1, config.HeartbeatMinutes.Value));
@@ -44,6 +44,31 @@ public sealed class Plugin : BasePlugin
             $"Playtime Tracker loaded — serverId='{config.ServerId.Value}', " +
             $"heartbeat={period.TotalMinutes}min, " +
             $"reporting={(string.IsNullOrWhiteSpace(config.IngestSecret.Value) ? "OFF (no secret)" : "on")}.");
+    }
+
+    // Patch each hook independently so one bad signature (e.g. after a game update)
+    // doesn't stop the others, and the log shows exactly what applied.
+    void ApplyPatches()
+    {
+        var types = new[]
+        {
+            typeof(OnUserConnectedPatch),
+            typeof(OnUserDisconnectedPatch),
+            typeof(VBloodSystemPatch),
+            typeof(DeathEventPatch),
+        };
+        foreach (var t in types)
+        {
+            try
+            {
+                _harmony.PatchAll(t);
+                Log.LogInfo($"Patched {t.Name} ✓");
+            }
+            catch (Exception ex)
+            {
+                Log.LogError($"FAILED to patch {t.Name}: {ex.Message}");
+            }
+        }
     }
 
     void SafeHeartbeat()
