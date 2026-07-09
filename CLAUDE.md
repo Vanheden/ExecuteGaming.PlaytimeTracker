@@ -83,22 +83,29 @@ a method's real signature — that's how the v1.1.13.0 signatures below were fou
 - **Threading:** only touch ECS (EntityManager/components) from the game thread
   (the Harmony patches). The heartbeat timer thread must not read game state — it
   only re-POSTs already-captured session data.
-- **Kill hooks (v1.1.13.0, dumped from interop):**
-  - **V Blood:** `VBloodSystem.OnUpdate()` (in `ProjectM.Gameplay.Systems.dll`) —
-    read field `EventList : NativeList<VBloodConsumed>` in a **Postfix**.
-    `VBloodConsumed { PrefabGUID Source (which V Blood); Entity Target (the consumer) }`.
-    `Target` is the player character → resolve its `User`.
-  - **PvP:** `DeathEventListenerSystem.OnUpdate()` (in `ProjectM.dll`) — read
-    `_DeathEventQuery.ToComponentDataArray<DeathEvent>(Allocator.Temp)` in a **Prefix**
-    (the death entities still exist before the system consumes them; dispose the array).
-    `DeathEvent { Entity Died; Entity Killer; Entity Source; StatChangeReason }`.
-    It's PvP when Killer≠Died and **both** have `PlayerCharacter`; score the Killer.
-  - `PlayerCharacter { FixedString64Bytes Name; Entity UserEntity }` and `DeathEvent`
-    live in `ProjectM.Shared.dll`; `PrefabGUID` (`.GuidHash`) in `Stunlock.Core.dll`.
-  - **Verify-live first:** these two are the most fragile bits. If V Bloods don't
-    register, try flipping the VBlood patch Prefix↔Postfix; if kills resolve to the
-    wrong player, `VBloodConsumed.Target` may be the user entity rather than the
-    character — `TryResolveUser` already handles both. Watch for `V Blood:`/`PvP:` logs.
+- **Kill hooks (v1.1.13.0, verified LIVE as of v0.2.2):** BOTH V Blood and PvP come
+  through the **same** patch — a **Prefix** on `DeathEventListenerSystem.OnUpdate()`
+  (`KillPatches.cs → DeathEventPatch`) that reads
+  `_DeathEventQuery.ToComponentDataArray<DeathEvent>(Allocator.Temp)` (the death
+  entities still exist before the system consumes them; dispose the array).
+  `DeathEvent { Entity Died; Entity Killer; Entity Source; StatChangeReason }`.
+  - A death is a **V Blood kill** when `Died` has `VBloodUnit` **or**
+    `VBloodConsumeSource` (both `ProjectM.Shared`) and the scorer — `Killer` if it's a
+    player, else `Source` — is a player. `victim` sent is `Died`'s `PrefabGUID.GuidHash`
+    (confirmed live: **Alpha Wolf = `-1905691330`**).
+  - A death is a **PvP kill** when `Killer ≠ Died` and **both** have `PlayerCharacter`;
+    score the `Killer`, `victim` is the dead player's character name.
+  - `PlayerCharacter { FixedString64Bytes Name; Entity UserEntity }`, `DeathEvent`,
+    `VBloodUnit`, `VBloodConsumeSource` live in `ProjectM.Shared.dll`; `PrefabGUID`
+    (`.GuidHash`) in `Stunlock.Core.dll`. Watch for `→ V Blood kill` / `→ PvP kill` logs.
+  - **DEAD END (don't retry):** the earlier `VBloodSystem.OnUpdate` **Postfix** +
+    `EventList : NativeList<VBloodConsumed>` approach (from
+    `ProjectM.Gameplay.Systems.dll`) only reflects **consumption/feeding**, not the
+    kill, and never fired on Postfix in testing. Dropped in v0.2.2 along with the
+    `ProjectM.Gameplay.Systems` csproj reference.
+  - Each hook is patched **independently** in `Plugin.cs#ApplyPatches()` (logs
+    `Patched X ✓` / `FAILED to patch X`), so one bad signature after a game update
+    doesn't take down the others.
 - After a big V Rising patch, re-verify all of the above against the current
   assemblies (re-run the metadata dumper). Bump the plugin version and rebuild.
 
