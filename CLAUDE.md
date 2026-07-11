@@ -32,6 +32,11 @@ user-facing `README.md` here for install/config; this file is the working notes.
 - `src/Patches/ClanResolver.cs` — resolves a `User` to its clan (stable GUID + name),
   shared by both patch files. Never throws — clan capture degrades to "no clan" so it
   can never break session/kill tracking.
+- `src/Patches/CastleRaidPatches.cs` — the castle-raid patch (`CastleRaidPatch`): a
+  Prefix on `CastleHeartEventSystem.ProcessRaidEvent` that records a raid (attacker +
+  defender clans) via `IngestClient.PostRaid`. Pure observer, never throws.
+- `src/Patches/CastleRaidResolver.cs` — resolves a castle-heart entity to its owning
+  `User` (the defender), via `UserOwner`/`CastleHeart.LastUserOwner`. Never throws.
 - `src/KillQueue.cs` — on-disk NDJSON kill queue. Failed kill POSTs are appended to
   `killqueue.ndjson` next to the plugin DLL; a background timer retries every 2 min.
   Capped at 500 entries. The site deduplicates by `eventId` so retries are harmless.
@@ -55,6 +60,15 @@ swapping the trailing `/session` for `/kill`, so operators configure one base UR
   dead player's clan, for clan-vs-clan wars. All are **empty strings when clanless**;
   the site treats empty/absent as "no clan" and keys clans by the stable `clanGuid`
   (rename-proof), displaying the latest `clanName`. See `Patches/ClanResolver.cs`.
+- `POST …/raid` (added in v0.4.0) — `{ eventId, serverId, kind:"raid", occurredAt,
+  attackerSteamId?, attackerName?, attackerClanGuid?, attackerClanName?,
+  defenderSteamId?, defenderName?, defenderClanGuid?, defenderClanName? }`.
+  The **raid URL is derived** from `Url` (swap `/session`→`/raid`), same as `/kill`.
+  Keyed by a per-raid `eventId` (INSERT OR IGNORE). Attacker = the raider (from
+  `FromCharacter`), defender = the raided castle's owner. Every attacker/defender field
+  is optional (empty string when unresolved — a clanless solo raider, or an owner whose
+  User doesn't resolve); the site records a raid as long as **one** side is identifiable.
+  Powers the raid feed + per-clan raid record. See `Patches/CastleRaidPatches.cs`.
 
 If you change either shape, change `../Website/server/playtime.js` too.
 
@@ -131,6 +145,29 @@ a method's real signature — that's how the v1.1.13.0 signatures below were fou
   The site keys clans by `ClanGuid` (survives renames) and shows the latest `Name`.
   Captured on the game thread only (same rule as everything else): at connect (often
   not loaded yet — refreshed on disconnect, like `CharName`) and at each kill.
+- **Castle raids (v1.1.13.0, verified via the metadata dumper — but PENDING LIVE
+  verification, like the kill hooks before v0.2.2):** a Prefix on
+  `CastleHeartEventSystem.ProcessRaidEvent(Entity heart, FromCharacter attacker, …)`
+  (`ProjectM.Gameplay.Systems.dll` — needs its own `<Reference>`). This is the
+  server-side handler that runs **after** the raid is validated, so we only see actual
+  raids (not rejected attempts). `CastleHeartInteractEventType` has a `Raid` value
+  confirming this is the raid path.
+  - **Attacker** = `FromCharacter { Entity User; Entity Character }` (`ProjectM.dll`,
+    ns `ProjectM.Network`) → `User` component → PlatformId/CharacterName + clan.
+  - **Defender** = the heart's owner: `UserOwner { NetworkedEntity Owner }` (ns
+    `ProjectM`) or `CastleHeart.LastUserOwner` (ns `ProjectM.CastleBuilding`), both
+    `NetworkedEntity` → `._Entity` = the owning user entity → `User` + clan. See
+    `CastleRaidResolver`. `CastleHeart.ActiveEvent` is a `CastleHeartEvent` enum
+    (`None/FreeClaim/Attacked/Breached/Raided`) if you ever need finer state.
+  - Raids are **rare** (need a siege + breach) and can't be staged in a quick smoke
+    test, so this ships built + compile-verified; the `→ Raid:` log line lets the first
+    real raid confirm the hook fires and both sides resolve. Patched **independently**
+    in `ApplyPatches()`, so a wrong signature after a game update fails alone.
+  - **Known fallback** if a future update inlines `ProcessRaidEvent` (patch fails): a
+    Prefix on `CastleHeartEventSystem.OnUpdate` reading `_CastleHeartInteractEventQuery`
+    for `CastleHeartInteractEvent { NetworkId CastleHeart; CastleHeartInteractEventType
+    EventType }` + `FromCharacter` (resolve the heart via `NetworkIdSystem`). Captures
+    attempts, not just confirmed raids, and needs NetworkId→Entity resolution.
 - After a big V Rising patch, re-verify all of the above against the current
   assemblies (re-run the metadata dumper). Bump the plugin version and rebuild.
 

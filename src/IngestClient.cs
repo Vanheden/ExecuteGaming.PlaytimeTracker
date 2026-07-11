@@ -39,19 +39,19 @@ public sealed class IngestClient : IDisposable
     bool Enabled => !string.IsNullOrWhiteSpace(_config.IngestSecret.Value)
                     && !string.IsNullOrWhiteSpace(_config.IngestUrl.Value);
 
-    // The kill endpoint is a sibling of the configured session endpoint: swap the
-    // trailing "/session" for "/kill" so operators only configure one base URL.
-    string KillUrl
+    // The kill/raid endpoints are siblings of the configured session endpoint: swap the
+    // trailing "/session" for "/kill" or "/raid" so operators only configure one URL.
+    string SiblingUrl(string leaf)
     {
-        get
-        {
-            var u = _config.IngestUrl.Value ?? "";
-            const string seg = "/session";
-            return u.EndsWith(seg, StringComparison.OrdinalIgnoreCase)
-                ? u.Substring(0, u.Length - seg.Length) + "/kill"
-                : u;
-        }
+        var u = _config.IngestUrl.Value ?? "";
+        const string seg = "/session";
+        return u.EndsWith(seg, StringComparison.OrdinalIgnoreCase)
+            ? u.Substring(0, u.Length - seg.Length) + leaf
+            : u;
     }
+
+    string KillUrl => SiblingUrl("/kill");
+    string RaidUrl => SiblingUrl("/raid");
 
     // Send a session state. `endedAt == null` means the player is still online.
     public void Post(Session s, DateTime? endedAt)
@@ -73,6 +73,18 @@ public sealed class IngestClient : IDisposable
         if (!Enabled) return;
         var json = BuildKillJson(steamId, charName, kind, victim, clanGuid, clanName, victimClanGuid, victimClanName);
         Send(KillUrl, json, $"{kind} kill {steamId}", isKill: true);
+    }
+
+    // Send one castle raid. `attacker*` is the raider (a steamId of 0 / null clan means
+    // unresolved); `defender*` is the raided castle's owner. Fire-and-forget; a lost
+    // raid POST just means one missing raid (idempotent server-side by eventId).
+    public void PostRaid(ulong attackerSteamId, string attackerName, string attackerClanGuid, string attackerClanName,
+        ulong defenderSteamId, string defenderName, string defenderClanGuid, string defenderClanName)
+    {
+        if (!Enabled) return;
+        var json = BuildRaidJson(attackerSteamId, attackerName, attackerClanGuid, attackerClanName,
+            defenderSteamId, defenderName, defenderClanGuid, defenderClanName);
+        Send(RaidUrl, json, $"raid {attackerSteamId}->{defenderSteamId}");
     }
 
     // Shared fire-and-forget POST. Never blocks the game/heartbeat thread.
@@ -120,6 +132,29 @@ public sealed class IngestClient : IDisposable
         Field(sb, "clanName", clanName ?? ""); sb.Append(',');
         Field(sb, "victimClanGuid", victimClanGuid ?? ""); sb.Append(',');
         Field(sb, "victimClanName", victimClanName ?? ""); sb.Append(',');
+        Field(sb, "occurredAt", Iso(DateTime.UtcNow));
+        sb.Append('}');
+        return sb.ToString();
+    }
+
+    // Raid payload. steamIds of 0 and null clans are sent as empty strings; the site
+    // treats empty/absent as "unknown" (so a clanless solo raider still records).
+    string BuildRaidJson(ulong attackerSteamId, string attackerName, string attackerClanGuid, string attackerClanName,
+        ulong defenderSteamId, string defenderName, string defenderClanGuid, string defenderClanName)
+    {
+        var sb = new StringBuilder(360);
+        sb.Append('{');
+        Field(sb, "eventId", Guid.NewGuid().ToString("N")); sb.Append(',');
+        Field(sb, "serverId", _config.ServerId.Value); sb.Append(',');
+        Field(sb, "kind", "raid"); sb.Append(',');
+        Field(sb, "attackerSteamId", attackerSteamId == 0 ? "" : attackerSteamId.ToString()); sb.Append(',');
+        Field(sb, "attackerName", attackerName ?? ""); sb.Append(',');
+        Field(sb, "attackerClanGuid", attackerClanGuid ?? ""); sb.Append(',');
+        Field(sb, "attackerClanName", attackerClanName ?? ""); sb.Append(',');
+        Field(sb, "defenderSteamId", defenderSteamId == 0 ? "" : defenderSteamId.ToString()); sb.Append(',');
+        Field(sb, "defenderName", defenderName ?? ""); sb.Append(',');
+        Field(sb, "defenderClanGuid", defenderClanGuid ?? ""); sb.Append(',');
+        Field(sb, "defenderClanName", defenderClanName ?? ""); sb.Append(',');
         Field(sb, "occurredAt", Iso(DateTime.UtcNow));
         sb.Append('}');
         return sb.ToString();

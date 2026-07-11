@@ -10,7 +10,7 @@ using ExecuteGaming.PlaytimeTracker.Patches;
 
 namespace ExecuteGaming.PlaytimeTracker;
 
-[BepInPlugin(GUID, "Execute-Gaming Playtime Tracker", "0.3.0")]
+[BepInPlugin(GUID, "Execute-Gaming Playtime Tracker", "0.4.0")]
 [BepInProcess("VRisingServer.exe")]
 public sealed class Plugin : BasePlugin
 {
@@ -42,6 +42,9 @@ public sealed class Plugin : BasePlugin
         KillPatchShared.Ingest = ingest;
         KillPatchShared.Log = Log;
         ClanResolver.Log = Log;
+        CastleRaidPatchShared.Ingest = ingest;
+        CastleRaidPatchShared.Log = Log;
+        CastleRaidResolver.Log = Log;
 
         _harmony = new Harmony(GUID);
         ApplyPatches();
@@ -65,6 +68,7 @@ public sealed class Plugin : BasePlugin
             typeof(OnUserConnectedPatch),
             typeof(OnUserDisconnectedPatch),
             typeof(DeathEventPatch),
+            typeof(CastleRaidPatch),
         };
         foreach (var t in types)
         {
