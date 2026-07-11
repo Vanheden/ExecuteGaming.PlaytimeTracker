@@ -29,6 +29,9 @@ user-facing `README.md` here for install/config; this file is the working notes.
   thread. Matches the site's `POST /api/ingest/session` contract exactly.
 - `src/Patches/ServerBootstrapPatches.cs` — connect/disconnect patches (playtime).
 - `src/Patches/KillPatches.cs` — V Blood + PvP kill patches (see below).
+- `src/Patches/ClanResolver.cs` — resolves a `User` to its clan (stable GUID + name),
+  shared by both patch files. Never throws — clan capture degrades to "no clan" so it
+  can never break session/kill tracking.
 - `src/KillQueue.cs` — on-disk NDJSON kill queue. Failed kill POSTs are appended to
   `killqueue.ndjson` next to the plugin DLL; a background timer retries every 2 min.
   Capped at 500 entries. The site deduplicates by `eventId` so retries are harmless.
@@ -38,13 +41,20 @@ user-facing `README.md` here for install/config; this file is the working notes.
 Two endpoints, same secret header. The kill URL is **derived** from `Url` by
 swapping the trailing `/session` for `/kill`, so operators configure one base URL.
 
-- `POST {Url}` (`…/session`) — `{ sessionId, serverId, steamId, charName, startedAt, endedAt?, seconds }`.
+- `POST {Url}` (`…/session`) — `{ sessionId, serverId, steamId, charName, clanGuid?,
+  clanName?, startedAt, endedAt?, seconds }`.
   Keyed by a **per-connect `sessionId` (GUID)** so heartbeats + the final disconnect
   UPSERT one row — idempotent, no double counting, self-healing.
-- `POST …/kill` — `{ eventId, serverId, steamId, charName, kind, victim, occurredAt }`
+- `POST …/kill` — `{ eventId, serverId, steamId, charName, kind, victim, clanGuid?,
+  clanName?, victimClanGuid?, victimClanName?, occurredAt }`
   where `kind` is `vblood` or `pvp`. Keyed by a **per-kill `eventId` (GUID)** so a
   retry can't double-count (server does INSERT OR IGNORE). `victim` is the V Blood's
   PrefabGUID hash (vblood) or the victim's character name (pvp).
+- **Clan fields** (both endpoints, added in v0.3.0): `clanGuid`/`clanName` is the
+  reporting player's clan; `victimClanGuid`/`victimClanName` (kill, PvP only) is the
+  dead player's clan, for clan-vs-clan wars. All are **empty strings when clanless**;
+  the site treats empty/absent as "no clan" and keys clans by the stable `clanGuid`
+  (rename-proof), displaying the latest `clanName`. See `Patches/ClanResolver.cs`.
 
 If you change either shape, change `../Website/server/playtime.js` too.
 
@@ -112,6 +122,15 @@ a method's real signature — that's how the v1.1.13.0 signatures below were fou
   - Each hook is patched **independently** in `Plugin.cs#ApplyPatches()` (logs
     `Patched X ✓` / `FAILED to patch X`), so one bad signature after a game update
     doesn't take down the others.
+- **Clan resolution (v1.1.13.0, verified via the metadata dumper):** a player's clan
+  hangs off the resolved `User`. `User.ClanEntity` is a **`NetworkedEntity`**
+  (`ProjectM.CodeGeneration.dll` — needs its own `<Reference>`); read its `._Entity`
+  field to get the clan `Entity` on the server. That entity carries **`ClanTeam`**
+  (`ProjectM.Shared.dll`, namespace `ProjectM`) with `FixedString64Bytes Name` and a
+  stable `Guid ClanGuid`. Clanless players have `ClanEntity._Entity == Entity.Null`.
+  The site keys clans by `ClanGuid` (survives renames) and shows the latest `Name`.
+  Captured on the game thread only (same rule as everything else): at connect (often
+  not loaded yet — refreshed on disconnect, like `CharName`) and at each kill.
 - After a big V Rising patch, re-verify all of the above against the current
   assemblies (re-run the metadata dumper). Bump the plugin version and rebuild.
 

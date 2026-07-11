@@ -65,10 +65,13 @@ public sealed class IngestClient : IDisposable
 
     // Send one kill event. `kind` is "vblood" or "pvp"; `victim` is the boss's
     // PrefabGUID hash (V Blood) or the victim's character name (PvP), or null.
-    public void PostKill(ulong steamId, string charName, string kind, string victim)
+    // clanGuid/clanName is the scorer's clan; victimClan* is the dead player's clan
+    // (PvP only) for clan-vs-clan wars. All clan fields may be null (clanless).
+    public void PostKill(ulong steamId, string charName, string kind, string victim,
+        string clanGuid = null, string clanName = null, string victimClanGuid = null, string victimClanName = null)
     {
         if (!Enabled) return;
-        var json = BuildKillJson(steamId, charName, kind, victim);
+        var json = BuildKillJson(steamId, charName, kind, victim, clanGuid, clanName, victimClanGuid, victimClanName);
         Send(KillUrl, json, $"{kind} kill {steamId}", isKill: true);
     }
 
@@ -101,9 +104,10 @@ public sealed class IngestClient : IDisposable
         });
     }
 
-    string BuildKillJson(ulong steamId, string charName, string kind, string victim)
+    string BuildKillJson(ulong steamId, string charName, string kind, string victim,
+        string clanGuid, string clanName, string victimClanGuid, string victimClanName)
     {
-        var sb = new StringBuilder(256);
+        var sb = new StringBuilder(320);
         sb.Append('{');
         Field(sb, "eventId", Guid.NewGuid().ToString("N")); sb.Append(',');
         Field(sb, "serverId", _config.ServerId.Value); sb.Append(',');
@@ -111,6 +115,11 @@ public sealed class IngestClient : IDisposable
         Field(sb, "charName", charName ?? ""); sb.Append(',');
         Field(sb, "kind", kind); sb.Append(',');
         Field(sb, "victim", victim ?? ""); sb.Append(',');
+        // Clan fields (empty when clanless) — the site treats empty as "no clan".
+        Field(sb, "clanGuid", clanGuid ?? ""); sb.Append(',');
+        Field(sb, "clanName", clanName ?? ""); sb.Append(',');
+        Field(sb, "victimClanGuid", victimClanGuid ?? ""); sb.Append(',');
+        Field(sb, "victimClanName", victimClanName ?? ""); sb.Append(',');
         Field(sb, "occurredAt", Iso(DateTime.UtcNow));
         sb.Append('}');
         return sb.ToString();
@@ -124,6 +133,8 @@ public sealed class IngestClient : IDisposable
         Field(sb, "serverId", _config.ServerId.Value); sb.Append(',');
         Field(sb, "steamId", s.SteamId.ToString()); sb.Append(',');
         Field(sb, "charName", s.CharName ?? ""); sb.Append(',');
+        Field(sb, "clanGuid", s.ClanGuid ?? ""); sb.Append(',');
+        Field(sb, "clanName", s.ClanName ?? ""); sb.Append(',');
         Field(sb, "startedAt", Iso(s.StartedAt)); sb.Append(',');
         if (endedAt.HasValue) { Field(sb, "endedAt", Iso(endedAt.Value)); sb.Append(','); }
         sb.Append("\"seconds\":").Append(seconds);

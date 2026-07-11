@@ -122,15 +122,22 @@ public static class DeathEventPatch
                 if (diedIsVBlood && !diedIsPlayer && scorer != Entity.Null)
                 {
                     if (!KillPatchShared.TryResolveUser(em, scorer, out var user)) continue;
+                    ClanResolver.TryGetClan(em, user, out var clanGuid, out var clanName);
                     ingest.PostKill(user.PlatformId, user.CharacterName.ToString(), "vblood",
-                        KillPatchShared.PrefabGuid(em, de.Died));
+                        KillPatchShared.PrefabGuid(em, de.Died), clanGuid, clanName);
                     KillPatchShared.Log?.LogInfo($"  → V Blood kill for {user.CharacterName} ({user.PlatformId})");
                 }
                 else if (killerIsPlayer && diedIsPlayer && de.Killer != de.Died)
                 {
                     if (!KillPatchShared.TryResolveUser(em, de.Killer, out var killer)) continue;
+                    ClanResolver.TryGetClan(em, killer, out var clanGuid, out var clanName);
+                    // Victim clan (for clan-vs-clan wars) — best effort; null if the
+                    // dead player has no clan or their User doesn't resolve.
+                    string victimClanGuid = null, victimClanName = null;
+                    if (KillPatchShared.TryResolveUser(em, de.Died, out var victimUser))
+                        ClanResolver.TryGetClan(em, victimUser, out victimClanGuid, out victimClanName);
                     ingest.PostKill(killer.PlatformId, killer.CharacterName.ToString(), "pvp",
-                        KillPatchShared.NameOf(em, de.Died));
+                        KillPatchShared.NameOf(em, de.Died), clanGuid, clanName, victimClanGuid, victimClanName);
                     KillPatchShared.Log?.LogInfo($"  → PvP kill: {killer.CharacterName} killed {KillPatchShared.NameOf(em, de.Died)}");
                 }
             }

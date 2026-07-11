@@ -54,7 +54,10 @@ public static class OnUserConnectedPatch
         var tracker = BootstrapPatchShared.Tracker;
         if (tracker == null) return;
         if (BootstrapPatchShared.TryGetUser(__instance, netConnectionId, out var user))
-            tracker.Connect(user.PlatformId, user.CharacterName.ToString());
+        {
+            ClanResolver.TryGetClan(__instance.EntityManager, user, out var clanGuid, out var clanName);
+            tracker.Connect(user.PlatformId, user.CharacterName.ToString(), clanGuid, clanName);
+        }
     }
 }
 
@@ -67,6 +70,9 @@ public static class OnUserDisconnectedPatch
         var tracker = BootstrapPatchShared.Tracker;
         if (tracker == null) return;
         if (BootstrapPatchShared.TryGetUser(__instance, netConnectionId, out var user))
-            tracker.Disconnect(user.PlatformId, user.CharacterName.ToString());
+        {
+            ClanResolver.TryGetClan(__instance.EntityManager, user, out var clanGuid, out var clanName);
+            tracker.Disconnect(user.PlatformId, user.CharacterName.ToString(), clanGuid, clanName);
+        }
     }
 }

@@ -12,6 +12,10 @@ public sealed class Session
     public string SessionId { get; init; }
     public ulong SteamId { get; init; }
     public string CharName { get; set; }
+    // Clan captured at event time (null = clanless). Refreshed on disconnect, since
+    // the clan often isn't loaded yet at connect — same pattern as CharName.
+    public string ClanGuid { get; set; }
+    public string ClanName { get; set; }
     public DateTime StartedAt { get; init; }
 }
 
@@ -31,13 +35,15 @@ public sealed class SessionTracker
     }
 
     // A player connected — open a session and report it (seconds = 0).
-    public void Connect(ulong steamId, string charName)
+    public void Connect(ulong steamId, string charName, string clanGuid = null, string clanName = null)
     {
         var session = new Session
         {
             SessionId = Guid.NewGuid().ToString("N"),
             SteamId = steamId,
             CharName = charName,
+            ClanGuid = clanGuid,
+            ClanName = clanName,
             StartedAt = DateTime.UtcNow,
         };
         _active[steamId] = session;
@@ -46,13 +52,20 @@ public sealed class SessionTracker
     }
 
     // A player disconnected — close their session and report the final time.
-    // The character name is usually populated by now (it often isn't at connect
-    // time), so refresh it on the way out for a correct final record.
-    public void Disconnect(ulong steamId, string charName = null)
+    // The character name + clan are usually populated by now (they often aren't at
+    // connect time), so refresh them on the way out for a correct final record.
+    public void Disconnect(ulong steamId, string charName = null, string clanGuid = null, string clanName = null)
     {
         if (_active.TryRemove(steamId, out var session))
         {
             if (!string.IsNullOrEmpty(charName)) session.CharName = charName;
+            // A resolved clan on disconnect wins; keep the earlier value otherwise
+            // (don't clobber a known clan with a transient null).
+            if (!string.IsNullOrEmpty(clanGuid))
+            {
+                session.ClanGuid = clanGuid;
+                session.ClanName = clanName;
+            }
             _log.LogInfo($"Disconnect: {session.CharName} ({steamId})");
             _ingest.Post(session, endedAt: DateTime.UtcNow);
         }

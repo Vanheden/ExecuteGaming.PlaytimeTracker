@@ -14,7 +14,7 @@
   <PropertyGroup>
     <TargetFramework>net6.0</TargetFramework>
     <AssemblyName>ExecuteGaming.PlaytimeTracker</AssemblyName>
-    <Version>0.2.4</Version>
+    <Version>0.3.0</Version>
     <LangVersion>latest</LangVersion>
     <Nullable>disable</Nullable>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
@@ -62,6 +62,8 @@
     <Reference Include="Il2Cppmscorlib"><HintPath>$(BepInExInterop)\Il2Cppmscorlib.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="ProjectM"><HintPath>$(BepInExInterop)\ProjectM.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="ProjectM.Shared"><HintPath>$(BepInExInterop)\ProjectM.Shared.dll</HintPath><Private>false</Private></Reference>
+    <!-- NetworkedEntity (User.ClanEntity) lives here — needed for clan resolution. -->
+    <Reference Include="ProjectM.CodeGeneration"><HintPath>$(BepInExInterop)\ProjectM.CodeGeneration.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="Stunlock.Core"><HintPath>$(BepInExInterop)\Stunlock.Core.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="Stunlock.Network"><HintPath>$(BepInExInterop)\Stunlock.Network.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="Unity.Entities"><HintPath>$(BepInExInterop)\Unity.Entities.dll</HintPath><Private>false</Private></Reference>
