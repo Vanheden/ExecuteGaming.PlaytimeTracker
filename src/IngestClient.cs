@@ -1,6 +1,7 @@
 using System;
 using System.Net.Http;
 using System.Text;
+using System.Text.Json;
 using System.Threading.Tasks;
 using BepInEx.Logging;
 
@@ -106,6 +107,11 @@ public sealed class IngestClient : IDisposable
                     if (isKill && _killQueue != null)
                         _killQueue.Enqueue(json);
                 }
+                else if (isKill)
+                {
+                    // A successful kill POST may return hype to announce in-game.
+                    await HandleKillResponse(res).ConfigureAwait(false);
+                }
             }
             catch (Exception ex)
             {
@@ -114,6 +120,33 @@ public sealed class IngestClient : IDisposable
                     _killQueue.Enqueue(json);
             }
         });
+    }
+
+    // Parse a kill response's optional `broadcasts` array and queue each string for
+    // the game thread to send to all clients. Best-effort — a malformed body or a
+    // missing array is simply ignored (most kills carry no broadcasts).
+    async Task HandleKillResponse(HttpResponseMessage res)
+    {
+        try
+        {
+            var body = await res.Content.ReadAsStringAsync().ConfigureAwait(false);
+            if (string.IsNullOrEmpty(body)) return;
+            using var doc = JsonDocument.Parse(body);
+            if (!doc.RootElement.TryGetProperty("broadcasts", out var arr) ||
+                arr.ValueKind != JsonValueKind.Array)
+                return;
+            foreach (var el in arr.EnumerateArray())
+            {
+                var s = el.GetString();
+                if (string.IsNullOrWhiteSpace(s)) continue;
+                BroadcastQueue.Enqueue(s);
+                _log.LogInfo($"Broadcast queued: {s}");
+            }
+        }
+        catch (Exception ex)
+        {
+            _log.LogWarning($"Kill response parse failed: {ex.Message}");
+        }
     }
 
     string BuildKillJson(ulong steamId, string charName, string kind, string victim,

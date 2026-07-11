@@ -89,6 +89,13 @@ public static class DeathEventPatch
         var ingest = KillPatchShared.Ingest;
         if (ingest == null) return;
 
+        // Flush any pending in-game broadcasts on the game thread. This system ticks
+        // whenever a death is processed, so hype (rampages/world-firsts — themselves
+        // triggered by kills) is delivered on the next death, which on an active
+        // server is continuous.
+        try { BroadcastQueue.Drain(__instance.EntityManager); }
+        catch (Exception ex) { KillPatchShared.Log?.LogWarning($"Broadcast drain failed: {ex.Message}"); }
+
         NativeArray<DeathEvent> deaths;
         try
         {
