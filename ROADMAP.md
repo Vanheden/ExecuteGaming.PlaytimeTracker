@@ -22,6 +22,15 @@ Small, focused mod, so this is short. Effort: **S** = an hour · **M** = an afte
   and retried every 2 minutes, so kills survive a website outage instead of being
   dropped. Sessions already self-heal via heartbeat; this closes the gap for kills.
   Capped at 500 entries; site-side `eventId` dedup makes retries harmless.
+- **Castle raid tracking** (v0.4.0) — a Prefix on `CastleHeartEventSystem.ProcessRaidEvent`
+  reports each raid's attacker + defender clans to `/api/ingest/raid`. Compiles + loads
+  clean; the hook itself is **pending a live raid** to confirm (raids can't be smoke-tested).
+- **In-game hype broadcasts** (v0.5.0) — killstreak / world-first announcements printed to
+  global chat. The mod reads the kill-ingest response's `broadcasts` array and sends each
+  via `ServerChatUtils.SendSystemMessageToAllClients` on the game thread (`BroadcastQueue`
+  bridges the HTTP-response thread → game thread, drained in the death patch). All wording
+  is computed site-side — the mod just prints. Compiles + **loads clean on the live server**;
+  the actual chat line is **pending a live play-test** (needs a real kill with a player online).
 - **Portable build** — references the local server install via `$(VRisingServer)` /
   `VRISING_SERVER`, no NuGet game packages; fails fast if the path is wrong.
 - **Resilient patching** — each hook is applied independently and logs `Patched X ✓`

@@ -40,6 +40,11 @@ user-facing `README.md` here for install/config; this file is the working notes.
 - `src/KillQueue.cs` — on-disk NDJSON kill queue. Failed kill POSTs are appended to
   `killqueue.ndjson` next to the plugin DLL; a background timer retries every 2 min.
   Capped at 500 entries. The site deduplicates by `eventId` so retries are harmless.
+- `src/BroadcastQueue.cs` (v0.5.0) — thread-safe holding pen for in-game hype messages
+  (killstreaks / world-first) the site returns in the kill-ingest response. Producers
+  (HTTP-response threads) `Enqueue`; the game thread `Drain(EntityManager)`s and sends
+  each to all clients via `ServerChatUtils.SendSystemMessageToAllClients`. Drained from
+  `DeathEventPatch.Prefix` (already on the game thread). Bounded + best-effort.
 
 ## The ingest contract (keep in sync with the site)
 
@@ -69,6 +74,13 @@ swapping the trailing `/session` for `/kill`, so operators configure one base UR
   is optional (empty string when unresolved — a clanless solo raider, or an owner whose
   User doesn't resolve); the site records a raid as long as **one** side is identifiable.
   Powers the raid feed + per-clan raid record. See `Patches/CastleRaidPatches.cs`.
+
+- **Kill response (v0.5.0):** `POST …/kill` now returns `200 { ok, broadcasts:[...] }`
+  (was `204`). `broadcasts` is an array of ready-to-print strings — killstreak/world-first
+  hype the site computed; usually empty. `IngestClient.HandleKillResponse` parses it on a
+  successful POST and enqueues each into `BroadcastQueue`. All detection/wording is the
+  site's job (`recordKill` highlights → `buildKillBroadcasts` in `../Website/server/`); the
+  mod is a thin printer. Queued retries (`KillQueue`) intentionally ignore broadcasts (stale).
 
 If you change either shape, change `../Website/server/playtime.js` too.
 
@@ -168,6 +180,19 @@ a method's real signature — that's how the v1.1.13.0 signatures below were fou
     for `CastleHeartInteractEvent { NetworkId CastleHeart; CastleHeartInteractEventType
     EventType }` + `FromCharacter` (resolve the heart via `NetworkIdSystem`). Captures
     attempts, not just confirmed raids, and needs NetworkId→Entity resolution.
+- **In-game broadcasts (v0.5.0, signature dumped from the interop DLLs — but chat
+  delivery PENDING LIVE PLAY-TEST):** send a global chat message with
+  `ProjectM.ServerChatUtils.SendSystemMessageToAllClients(EntityManager em, ref
+  FixedString512Bytes msg)` (in `ProjectM.dll`; `ServerChatUtils` also has
+  `SendSystemMessageToClient(em/ecb, User, ref msg)`). Build the message with
+  `new FixedString512Bytes(string)` (`Unity.Collections`; ~509-byte cap — `BroadcastQueue`
+  caps at 200 chars). **Must run on the game thread** (touches ECS), so HTTP-response
+  threads only `Enqueue`; `DeathEventPatch.Prefix` `Drain`s. Consequence: hype flushes on
+  the **next death event** (continuous on an active server; the death system doesn't tick
+  on an empty one — so this can't be smoke-tested solo). VampireCommandFramework is **not**
+  installed, so we use the game's own `ServerChatUtils` directly. The mod compiles clean
+  and **loads clean on the live server** (all 4 patches ✓); the actual chat line needs a
+  real kill with a player online to confirm.
 - After a big V Rising patch, re-verify all of the above against the current
   assemblies (re-run the metadata dumper). Bump the plugin version and rebuild.
 
