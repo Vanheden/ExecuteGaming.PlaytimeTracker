@@ -95,6 +95,10 @@ public static class DeathEventPatch
         // server is continuous.
         try { BroadcastQueue.Drain(__instance.EntityManager); }
         catch (Exception ex) { KillPatchShared.Log?.LogWarning($"Broadcast drain failed: {ex.Message}"); }
+        // Also flush pending chat-command replies here, so they land promptly even
+        // between chat messages (the chat system only ticks when someone chats).
+        try { CommandReplyQueue.Drain(__instance.EntityManager); }
+        catch (Exception ex) { KillPatchShared.Log?.LogWarning($"Reply drain failed: {ex.Message}"); }
 
         NativeArray<DeathEvent> deaths;
         try

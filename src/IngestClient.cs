@@ -54,6 +54,60 @@ public sealed class IngestClient : IDisposable
     string KillUrl => SiblingUrl("/kill");
     string RaidUrl => SiblingUrl("/raid");
 
+    // The chat-command endpoint lives under /api/mod/cmd, a sibling of /api/ingest.
+    // Derive it from the configured .../api/ingest/session URL.
+    string CmdUrl
+    {
+        get
+        {
+            var u = _config.IngestUrl.Value ?? "";
+            const string seg = "/ingest/session";
+            return u.EndsWith(seg, StringComparison.OrdinalIgnoreCase)
+                ? u.Substring(0, u.Length - seg.Length) + "/mod/cmd"
+                : u;
+        }
+    }
+
+    // Fetch a chat command's reply lines from the website and hand them to `onLines`
+    // (invoked on a background thread). Fire-and-forget: any failure is logged and the
+    // command silently produces no reply. `cmd` is a known command name (rank/top/…).
+    public void FetchCommand(ulong steamId, string cmd, string charName, Action<string[]> onLines)
+    {
+        if (!Enabled || onLines == null) return;
+        var url = CmdUrl
+            + "?cmd=" + Uri.EscapeDataString(cmd)
+            + "&steamId=" + steamId
+            + "&charName=" + Uri.EscapeDataString(charName ?? "");
+        var secret = _config.IngestSecret.Value;
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                using var req = new HttpRequestMessage(HttpMethod.Get, url);
+                req.Headers.Add("X-Ingest-Secret", secret);
+                using var res = await Http.SendAsync(req).ConfigureAwait(false);
+                if (!res.IsSuccessStatusCode) return;
+                var body = await res.Content.ReadAsStringAsync().ConfigureAwait(false);
+                if (string.IsNullOrEmpty(body)) return;
+                using var doc = JsonDocument.Parse(body);
+                if (!doc.RootElement.TryGetProperty("lines", out var arr) ||
+                    arr.ValueKind != JsonValueKind.Array)
+                    return;
+                var lines = new System.Collections.Generic.List<string>();
+                foreach (var el in arr.EnumerateArray())
+                {
+                    var s = el.GetString();
+                    if (!string.IsNullOrWhiteSpace(s)) lines.Add(s);
+                }
+                if (lines.Count > 0) onLines(lines.ToArray());
+            }
+            catch (Exception ex)
+            {
+                _log.LogWarning($"Command fetch ({cmd}) failed: {ex.Message}");
+            }
+        });
+    }
+
     // Send a session state. `endedAt == null` means the player is still online.
     public void Post(Session s, DateTime? endedAt)
     {

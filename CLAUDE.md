@@ -45,6 +45,16 @@ user-facing `README.md` here for install/config; this file is the working notes.
   (HTTP-response threads) `Enqueue`; the game thread `Drain(EntityManager)`s and sends
   each to all clients via `ServerChatUtils.SendSystemMessageToAllClients`. Drained from
   `DeathEventPatch.Prefix` (already on the game thread). Bounded + best-effort.
+- `src/Patches/ChatCommandPatches.cs` + `src/CommandReplyQueue.cs` (v0.6.0) — in-game
+  chat commands. A Prefix on `ChatMessageSystem.OnUpdate` iterates `_ChatMessageQuery`,
+  reads each `ChatMessageEvent.MessageText`, and on a known `!command` (rank/top/vbloods/
+  online/help) resolves the sender's `User` (via `FromCharacter.User`) and calls
+  `IngestClient.FetchCommand` → `GET /api/mod/cmd`. The site returns colour-tagged `lines`;
+  the mod enqueues them (paired with the `User`) into `CommandReplyQueue`, drained on the
+  game thread (from the chat + death patches) to reply **privately** via
+  `ServerChatUtils.SendSystemMessageToClient(em, User, ref FixedString512Bytes)`. Gated by
+  `Chat.EnableCommands`. All wording/formatting is site-side — the mod just recognises the
+  command and prints the answer.
 
 ## The ingest contract (keep in sync with the site)
 
@@ -192,7 +202,21 @@ a method's real signature — that's how the v1.1.13.0 signatures below were fou
   on an empty one — so this can't be smoke-tested solo). VampireCommandFramework is **not**
   installed, so we use the game's own `ServerChatUtils` directly. The mod compiles clean
   and **loads clean on the live server** (all 4 patches ✓); the actual chat line needs a
-  real kill with a player online to confirm.
+  real kill with a player online to confirm. Emoji render as missing-glyph boxes in the
+  chat font, so hype is colour-coded with TextMeshPro `<color=#RRGGBB>…</color>` tags
+  (built site-side) instead — the chat renders rich-text colour fine.
+- **Chat commands (v0.6.0, signatures dumped from the interop DLLs — chat READ + private
+  reply PENDING LIVE PLAY-TEST):** read incoming chat with a Prefix on
+  `ProjectM.ChatMessageSystem.OnUpdate` → `__instance._ChatMessageQuery.ToEntityArray(...)`;
+  each entity has `ProjectM.Network.ChatMessageEvent { ChatMessageType MessageType;
+  FixedString512Bytes MessageText; NetworkId ReceiverEntity }` and
+  `ProjectM.Network.FromCharacter { Entity User; Entity Character }`. Resolve the sender via
+  `em.GetComponentData<User>(fromCharacter.User)` (→ `PlatformId`, `CharacterName`). Reply to
+  just that player with `ServerChatUtils.SendSystemMessageToClient(EntityManager, User, ref
+  FixedString512Bytes)`. Same game-thread rule as broadcasts: the async HTTP reply only
+  `Enqueue`s into `CommandReplyQueue`; the chat + death patches `Drain`. Consequence: a reply
+  flushes on the next chat **or** death tick, so a solo tester may need a second message to
+  see the previous reply. The `!command` still echoes in public chat (not suppressed in v1).
 - After a big V Rising patch, re-verify all of the above against the current
   assemblies (re-run the metadata dumper). Bump the plugin version and rebuild.
 

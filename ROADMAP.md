@@ -31,6 +31,16 @@ Small, focused mod, so this is short. Effort: **S** = an hour · **M** = an afte
   bridges the HTTP-response thread → game thread, drained in the death patch). All wording
   is computed site-side — the mod just prints. Compiles + **loads clean on the live server**;
   the actual chat line is **pending a live play-test** (needs a real kill with a player online).
+  Wording is **colour-coded** with TextMeshPro `<color>` tags (emoji don't render in the
+  chat font — they show as boxes — so tier/hype is carried by colour, built site-side).
+- **In-game chat commands** (v0.6.0) — players type `!rank`, `!top`, `!vbloods`, `!online`,
+  `!help` in chat and get a **private** reply. A Prefix on `ChatMessageSystem.OnUpdate` reads
+  each `ChatMessageEvent`, and on a known `!command` asks the site (`GET /api/mod/cmd`) for the
+  ready-to-print, colour-tagged lines, then replies to just that player via
+  `ServerChatUtils.SendSystemMessageToClient` (`CommandReplyQueue` bridges the async HTTP thread
+  → game thread; drained from the chat + death patches). Toggle: `Chat.EnableCommands`. Compiles
+  clean; **pending a live play-test** (needs a player typing in-game). The `!command` line still
+  echoes in public chat (not suppressed in v1).
 - **Portable build** — references the local server install via `$(VRisingServer)` /
   `VRISING_SERVER`, no NuGet game packages; fails fast if the path is wrong.
 - **Resilient patching** — each hook is applied independently and logs `Patched X ✓`
