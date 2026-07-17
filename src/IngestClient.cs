@@ -123,10 +123,11 @@ public sealed class IngestClient : IDisposable
     // clanGuid/clanName is the scorer's clan; victimClan* is the dead player's clan
     // (PvP only) for clan-vs-clan wars. All clan fields may be null (clanless).
     public void PostKill(ulong steamId, string charName, string kind, string victim,
-        string clanGuid = null, string clanName = null, string victimClanGuid = null, string victimClanName = null)
+        string clanGuid = null, string clanName = null, string victimClanGuid = null, string victimClanName = null,
+        ulong victimSteamId = 0)
     {
         if (!Enabled) return;
-        var json = BuildKillJson(steamId, charName, kind, victim, clanGuid, clanName, victimClanGuid, victimClanName);
+        var json = BuildKillJson(steamId, charName, kind, victim, clanGuid, clanName, victimClanGuid, victimClanName, victimSteamId);
         Send(KillUrl, json, $"{kind} kill {steamId}", isKill: true);
     }
 
@@ -204,9 +205,9 @@ public sealed class IngestClient : IDisposable
     }
 
     string BuildKillJson(ulong steamId, string charName, string kind, string victim,
-        string clanGuid, string clanName, string victimClanGuid, string victimClanName)
+        string clanGuid, string clanName, string victimClanGuid, string victimClanName, ulong victimSteamId)
     {
-        var sb = new StringBuilder(320);
+        var sb = new StringBuilder(340);
         sb.Append('{');
         Field(sb, "eventId", Guid.NewGuid().ToString("N")); sb.Append(',');
         Field(sb, "serverId", _config.ServerId.Value); sb.Append(',');
@@ -219,6 +220,9 @@ public sealed class IngestClient : IDisposable
         Field(sb, "clanName", clanName ?? ""); sb.Append(',');
         Field(sb, "victimClanGuid", victimClanGuid ?? ""); sb.Append(',');
         Field(sb, "victimClanName", victimClanName ?? ""); sb.Append(',');
+        // Victim SteamID (PvP only; 0 = unknown → empty). Lets the site resolve
+        // rivalries exactly instead of guessing from the victim's character name.
+        Field(sb, "victimSteamId", victimSteamId == 0 ? "" : victimSteamId.ToString()); sb.Append(',');
         Field(sb, "occurredAt", Iso(DateTime.UtcNow));
         sb.Append('}');
         return sb.ToString();

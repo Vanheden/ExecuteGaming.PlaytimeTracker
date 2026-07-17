@@ -33,6 +33,11 @@ Small, focused mod, so this is short. Effort: **S** = an hour · **M** = an afte
   the actual chat line is **pending a live play-test** (needs a real kill with a player online).
   Wording is **colour-coded** with TextMeshPro `<color>` tags (emoji don't render in the
   chat font — they show as boxes — so tier/hype is carried by colour, built site-side).
+- **Exact PvP identity** (v0.7.0) — PvP kills now also send the **victim's SteamID**
+  (`victimSteamId`, resolved from the dead player's `User.PlatformId`), so the site
+  matches rivalries/nemeses to an exact player instead of guessing from the victim's
+  character name (which breaks on renames / shared names). The site prefers it and
+  falls back to name-matching for older rows. No new patch — one extra JSON field.
 - **In-game chat commands** (v0.6.0) — players type `!rank`, `!top`, `!vbloods`, `!online`,
   `!help` in chat and get a **private** reply. A Prefix on `ChatMessageSystem.OnUpdate` reads
   each `ChatMessageEvent`, and on a known `!command` asks the site (`GET /api/mod/cmd`) for the

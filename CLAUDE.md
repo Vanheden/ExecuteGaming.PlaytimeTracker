@@ -66,10 +66,12 @@ swapping the trailing `/session` for `/kill`, so operators configure one base UR
   Keyed by a **per-connect `sessionId` (GUID)** so heartbeats + the final disconnect
   UPSERT one row — idempotent, no double counting, self-healing.
 - `POST …/kill` — `{ eventId, serverId, steamId, charName, kind, victim, clanGuid?,
-  clanName?, victimClanGuid?, victimClanName?, occurredAt }`
+  clanName?, victimClanGuid?, victimClanName?, victimSteamId?, occurredAt }`
   where `kind` is `vblood` or `pvp`. Keyed by a **per-kill `eventId` (GUID)** so a
   retry can't double-count (server does INSERT OR IGNORE). `victim` is the V Blood's
-  PrefabGUID hash (vblood) or the victim's character name (pvp).
+  PrefabGUID hash (vblood) or the victim's character name (pvp). `victimSteamId`
+  (v0.7.0, PvP only, empty when unresolved) is the dead player's `User.PlatformId` so
+  the site resolves rivalries exactly instead of guessing from the victim's name.
 - **Clan fields** (both endpoints, added in v0.3.0): `clanGuid`/`clanName` is the
   reporting player's clan; `victimClanGuid`/`victimClanName` (kill, PvP only) is the
   dead player's clan, for clan-vs-clan wars. All are **empty strings when clanless**;

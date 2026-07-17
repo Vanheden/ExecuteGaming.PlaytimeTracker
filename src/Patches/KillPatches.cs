@@ -142,13 +142,19 @@ public static class DeathEventPatch
                 {
                     if (!KillPatchShared.TryResolveUser(em, de.Killer, out var killer)) continue;
                     ClanResolver.TryGetClan(em, killer, out var clanGuid, out var clanName);
-                    // Victim clan (for clan-vs-clan wars) — best effort; null if the
-                    // dead player has no clan or their User doesn't resolve.
+                    // Victim clan (for clan-vs-clan wars) + victim SteamID (exact PvP
+                    // identity) — best effort; both blank if the dead player's User
+                    // doesn't resolve.
                     string victimClanGuid = null, victimClanName = null;
+                    ulong victimSteamId = 0;
                     if (KillPatchShared.TryResolveUser(em, de.Died, out var victimUser))
+                    {
                         ClanResolver.TryGetClan(em, victimUser, out victimClanGuid, out victimClanName);
+                        victimSteamId = victimUser.PlatformId;
+                    }
                     ingest.PostKill(killer.PlatformId, killer.CharacterName.ToString(), "pvp",
-                        KillPatchShared.NameOf(em, de.Died), clanGuid, clanName, victimClanGuid, victimClanName);
+                        KillPatchShared.NameOf(em, de.Died), clanGuid, clanName, victimClanGuid, victimClanName,
+                        victimSteamId);
                     KillPatchShared.Log?.LogInfo($"  → PvP kill: {killer.CharacterName} killed {KillPatchShared.NameOf(em, de.Died)}");
                 }
             }

@@ -10,7 +10,7 @@ using ExecuteGaming.PlaytimeTracker.Patches;
 
 namespace ExecuteGaming.PlaytimeTracker;
 
-[BepInPlugin(GUID, "Execute-Gaming Playtime Tracker", "0.6.0")]
+[BepInPlugin(GUID, "Execute-Gaming Playtime Tracker", "0.7.0")]
 [BepInProcess("VRisingServer.exe")]
 public sealed class Plugin : BasePlugin
 {
