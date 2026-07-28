@@ -35,8 +35,12 @@ user-facing `README.md` here for install/config; this file is the working notes.
 - `src/Patches/CastleRaidPatches.cs` — the castle-raid patch (`CastleRaidPatch`): a
   Prefix on `CastleHeartEventSystem.ProcessRaidEvent` that records a raid (attacker +
   defender clans) via `IngestClient.PostRaid`. Pure observer, never throws.
+  **(v0.7.1)** Guards with `EntityManager.Exists()` before touching the heart or the
+  attacker `User` — see the decay-crash note below.
 - `src/Patches/CastleRaidResolver.cs` — resolves a castle-heart entity to its owning
   `User` (the defender), via `UserOwner`/`CastleHeart.LastUserOwner`. Never throws.
+  **(v0.7.1)** `Exists()`-guards the heart and the resolved owner entity before every
+  `GetComponentData`, so a torn-down (decaying) heart can't native-crash the server.
 - `src/KillQueue.cs` — on-disk NDJSON kill queue. Failed kill POSTs are appended to
   `killqueue.ndjson` next to the plugin DLL; a background timer retries every 2 min.
   Capped at 500 entries. The site deduplicates by `eventId` so retries are harmless.
@@ -192,6 +196,16 @@ a method's real signature — that's how the v1.1.13.0 signatures below were fou
     for `CastleHeartInteractEvent { NetworkId CastleHeart; CastleHeartInteractEventType
     EventType }` + `FromCharacter` (resolve the heart via `NetworkIdSystem`). Captures
     attempts, not just confirmed raids, and needs NetworkId→Entity resolution.
+  - **DECAY-CRASH HARDENING (v0.7.1):** dropping castle defenses at the heart of a
+    **decaying** castle was hard-crashing the server. During decay/teardown the heart
+    (and/or the owner) entity can already be **freed**; reading its ECS components is a
+    **native access violation** that the patch's `try/catch` CANNOT catch — it takes the
+    whole server down. Fix: `EntityManager.Exists()` guards before every component
+    access — bail in `CastleRaidPatch.Prefix` if `__0`/`__1.User` don't exist, and in
+    `CastleRaidResolver.TryGetOwner` before reading the heart and the resolved owner.
+    **Rule for any future ECS patch on teardown-prone entities (hearts, decaying
+    structures): `Exists()` first — a managed `try/catch` will NOT save you from a freed
+    entity.** (If the crash still reproduces with the mod removed, it's a vanilla bug.)
 - **In-game broadcasts (v0.5.0, signature dumped from the interop DLLs — but chat
   delivery PENDING LIVE PLAY-TEST):** send a global chat message with
   `ProjectM.ServerChatUtils.SendSystemMessageToAllClients(EntityManager em, ref

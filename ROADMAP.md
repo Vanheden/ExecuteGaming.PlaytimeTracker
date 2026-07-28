@@ -46,6 +46,13 @@ Small, focused mod, so this is short. Effort: **S** = an hour · **M** = an afte
   → game thread; drained from the chat + death patches). Toggle: `Chat.EnableCommands`. Compiles
   clean; **pending a live play-test** (needs a player typing in-game). The `!command` line still
   echoes in public chat (not suppressed in v1).
+- **Castle-decay crash hardening** (v0.7.1) — dropping castle defenses at the heart of a
+  **decaying** castle hard-crashed the server. The raid patch read ECS components off a heart
+  entity that, during decay/teardown, can already be **freed** — a native access violation the
+  `try/catch` can't catch, taking the whole server down. Added `EntityManager.Exists()` guards
+  before every component access in `CastleRaidPatch` + `CastleRaidResolver`. Builds clean;
+  deploy the new DLL and re-test drop-defenses on a decaying castle. (If it still crashes with
+  the mod removed, it's a vanilla bug.)
 - **Portable build** — references the local server install via `$(VRisingServer)` /
   `VRISING_SERVER`, no NuGet game packages; fails fast if the path is wrong.
 - **Resilient patching** — each hook is applied independently and logs `Patched X ✓`
