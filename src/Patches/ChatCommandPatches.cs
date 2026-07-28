@@ -4,6 +4,8 @@ using ProjectM;                 // ChatMessageSystem
 using ProjectM.Network;         // ChatMessageEvent, FromCharacter, User
 using Unity.Collections;        // Allocator, NativeArray
 using Unity.Entities;           // Entity, EntityManager
+using Unity.Mathematics;        // float3
+using Unity.Transforms;         // LocalTransform
 using BepInEx.Logging;
 
 namespace ExecuteGaming.PlaytimeTracker.Patches;
@@ -26,7 +28,7 @@ public static class ChatCommandPatch
     public static ManualLogSource Log;
     public static bool Enabled = true;
 
-    static readonly string[] Known = { "rank", "top", "vbloods", "online", "help", "commands" };
+    static readonly string[] Known = { "rank", "top", "vbloods", "online", "help", "commands", "vendor" };
 
     // Prefix: the chat event entities still exist before the system consumes them.
     public static void Prefix(ChatMessageSystem __instance)
@@ -43,6 +45,12 @@ public static class ChatCommandPatch
         NativeArray<Entity> ents;
         try { ents = __instance._ChatMessageQuery.ToEntityArray(Allocator.Temp); }
         catch (Exception ex) { Log?.LogWarning($"Chat query failed: {ex.Message}"); return; }
+
+        // `!vendor` spawns an entity (a structural change), which we defer until AFTER
+        // the query array is disposed so we don't mutate ECS mid-iteration.
+        bool spawnVendor = false;
+        User vendorUser = default;
+        float3 vendorPos = default;
 
         try
         {
@@ -62,6 +70,22 @@ public static class ChatCommandPatch
                 if (!em.HasComponent<User>(from.User)) continue;
                 var user = em.GetComponentData<User>(from.User);
 
+                // Admin-only local command: spawn the reward vendor at the caller's feet.
+                if (cmd == "vendor")
+                {
+                    if (!user.IsAdmin)
+                    {
+                        CommandReplyQueue.Enqueue(user, "<color=#ff4d63>Only admins can spawn the vendor.</color>");
+                    }
+                    else if (em.HasComponent<LocalTransform>(from.Character))
+                    {
+                        vendorPos = em.GetComponentData<LocalTransform>(from.Character).Position;
+                        vendorUser = user;
+                        spawnVendor = true;
+                    }
+                    continue;
+                }
+
                 var steamId = user.PlatformId;
                 var charName = user.CharacterName.ToString();
                 var capturedUser = user; // captured by value for the async reply
@@ -75,6 +99,15 @@ public static class ChatCommandPatch
         }
         catch (Exception ex) { Log?.LogWarning($"Chat command patch failed: {ex.Message}"); }
         finally { ents.Dispose(); }
+
+        // Deferred spawn (structural change) — safe now the query array is disposed.
+        if (spawnVendor)
+        {
+            var ok = VendorSpawner.Spawn(em, __instance.World, vendorPos, out _);
+            CommandReplyQueue.Enqueue(vendorUser, ok
+                ? "<color=#7cf267>Vendor spawned next to you.</color>"
+                : "<color=#ff4d63>Vendor spawn failed — check the server log.</color>");
+        }
     }
 
     // Normalised command name for a known "!cmd ..." message, else null (ignored).

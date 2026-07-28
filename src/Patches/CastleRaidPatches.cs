@@ -49,10 +49,16 @@ public static class CastleRaidPatch
         {
             var em = __instance.EntityManager;
 
+            // HARDENING: during castle decay / "drop defenses" the heart entity can be
+            // mid-teardown. Reading components off a freed entity is a NATIVE access
+            // violation that the try/catch below CANNOT catch (it would hard-crash the
+            // server). Bail out before touching anything if the heart no longer exists.
+            if (__0 == Entity.Null || !em.Exists(__0)) return;
+
             // Attacker (the raider) — FromCharacter.User is the user entity.
             ulong atkSteam = 0;
             string atkName = null, atkClanGuid = null, atkClanName = null;
-            if (em.HasComponent<User>(__1.User))
+            if (__1.User != Entity.Null && em.Exists(__1.User) && em.HasComponent<User>(__1.User))
             {
                 var au = em.GetComponentData<User>(__1.User);
                 atkSteam = au.PlatformId;
