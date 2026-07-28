@@ -27,7 +27,10 @@ public static class CastleRaidResolver
         owner = default;
         try
         {
-            if (heart == Entity.Null) return false;
+            // HARDENING: a decaying/torn-down heart entity may already be freed. Reading
+            // components off it is a native access violation the caller's catch can't
+            // catch — guard with Exists before every component access.
+            if (heart == Entity.Null || !em.Exists(heart)) return false;
             var ownerUser = Entity.Null;
 
             if (em.HasComponent<UserOwner>(heart))
@@ -36,7 +39,8 @@ public static class CastleRaidResolver
             if (ownerUser == Entity.Null && em.HasComponent<CastleHeart>(heart))
                 ownerUser = em.GetComponentData<CastleHeart>(heart).LastUserOwner._Entity;
 
-            if (ownerUser == Entity.Null || !em.HasComponent<User>(ownerUser)) return false;
+            if (ownerUser == Entity.Null || !em.Exists(ownerUser) || !em.HasComponent<User>(ownerUser))
+                return false;
             owner = em.GetComponentData<User>(ownerUser);
             return true;
         }
