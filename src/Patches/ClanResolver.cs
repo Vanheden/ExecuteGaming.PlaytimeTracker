@@ -29,7 +29,9 @@ public static class ClanResolver
         try
         {
             var clanEntity = user.ClanEntity._Entity;
-            if (clanEntity == Entity.Null) return false;
+            // Exists() before touching it — during a castle teardown the clan entity can
+            // be mid-destruction, and reading a freed entity native-crashes the server.
+            if (clanEntity == Entity.Null || !em.Exists(clanEntity)) return false;
             if (!em.HasComponent<ClanTeam>(clanEntity)) return false;
 
             var clan = em.GetComponentData<ClanTeam>(clanEntity);

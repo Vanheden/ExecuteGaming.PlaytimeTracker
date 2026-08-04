@@ -28,17 +28,24 @@ public static class KillPatchShared
     // Resolve the owning User for an entity that may be a player character (has
     // PlayerCharacter → UserEntity → User) or a user entity directly. False for
     // non-players. Never throws.
+    // A non-null entity that STILL EXISTS. During a castle teardown/decay (e.g. dropping
+    // defenses) many entities are destroyed in the same frame; reading components off a
+    // freed entity is a native access violation the try/catch below CANNOT catch (it
+    // hard-crashes the server). Every helper here gates on this first.
+    public static bool Valid(EntityManager em, Entity e)
+        => e != Entity.Null && em.Exists(e);
+
     public static bool TryResolveUser(EntityManager em, Entity e, out User user)
     {
         user = default;
         try
         {
-            if (e == Entity.Null) return false;
+            if (!Valid(em, e)) return false;
             if (em.HasComponent<User>(e)) { user = em.GetComponentData<User>(e); return true; }
             if (em.HasComponent<PlayerCharacter>(e))
             {
                 var pc = em.GetComponentData<PlayerCharacter>(e);
-                if (em.HasComponent<User>(pc.UserEntity))
+                if (Valid(em, pc.UserEntity) && em.HasComponent<User>(pc.UserEntity))
                 {
                     user = em.GetComponentData<User>(pc.UserEntity);
                     return true;
@@ -50,17 +57,17 @@ public static class KillPatchShared
     }
 
     public static bool IsPlayer(EntityManager em, Entity e)
-        => e != Entity.Null && em.HasComponent<PlayerCharacter>(e);
+        => Valid(em, e) && em.HasComponent<PlayerCharacter>(e);
 
     public static bool IsVBlood(EntityManager em, Entity e)
-        => e != Entity.Null && (em.HasComponent<VBloodUnit>(e) || em.HasComponent<VBloodConsumeSource>(e));
+        => Valid(em, e) && (em.HasComponent<VBloodUnit>(e) || em.HasComponent<VBloodConsumeSource>(e));
 
     // The dead entity's own prefab id (e.g. the V Blood boss), as a string, or "".
     public static string PrefabGuid(EntityManager em, Entity e)
     {
         try
         {
-            if (e != Entity.Null && em.HasComponent<PrefabGUID>(e))
+            if (Valid(em, e) && em.HasComponent<PrefabGUID>(e))
                 return em.GetComponentData<PrefabGUID>(e).GuidHash.ToString();
         }
         catch { /* ignore */ }
@@ -72,7 +79,7 @@ public static class KillPatchShared
     {
         try
         {
-            if (em.HasComponent<PlayerCharacter>(e))
+            if (Valid(em, e) && em.HasComponent<PlayerCharacter>(e))
                 return em.GetComponentData<PlayerCharacter>(e).Name.ToString();
         }
         catch { /* ignore */ }
