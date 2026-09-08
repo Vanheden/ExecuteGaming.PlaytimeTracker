@@ -162,3 +162,7 @@ a game update, re-dump the interop assemblies (see `CLAUDE.md`) and re-check the
 Then bump the version in `.csproj` / `manifest.json` / `Plugin.cs` and rebuild.
 
 See `ROADMAP.md` for what's next.
+
+## Credits
+
+Designed and built entirely by **Claude AI** ([Claude Code](https://claude.com/claude-code), Anthropic) in collaboration with the Execute-Gaming community.
